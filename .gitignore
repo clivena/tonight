@@ -1,0 +1,24 @@
+# --- 构建产物（关键：不带前导斜杠，匹配所有层级的 build 目录）---
+build/
+.cxx/
+.externalNativeBuild/
+captures/
+
+# --- Gradle ---
+.gradle/
+.kotlin/
+
+# --- 本机环境（含绝对路径，绝不提交）---
+local.properties
+
+# --- IDE ---
+.idea/
+*.iml
+
+# --- 签名文件（泄露 = 别人能冒充你发布更新）---
+*.jks
+*.keystore
+
+# --- 系统 ---
+.DS_Store
+Thumbs.db
