@@ -14,7 +14,9 @@ data class Task(
     val content: String,
     val orderIndex: Int,
     val status: TaskStatus
-)
+) {
+    val isDone: Boolean get() = status == TaskStatus.DONE
+}
 
 enum class TaskStatus {
     /** 待做 */

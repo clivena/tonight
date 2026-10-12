@@ -12,28 +12,38 @@ import java.time.LocalDate
  */
 interface TaskRepository {
 
-    /** 某天全部待做任务，按晚上排好的顺序 */
-    fun observePending(date: LocalDate): Flow<List<Task>>
-
-    /** 某天第一件待做任务；全部做完时为 null */
-    fun observeFirstPending(date: LocalDate): Flow<Task?>
-
-    /** 某天是否还有待做任务。用于决定进「今晚」还是「明早」 */
-    fun hasPending(date: LocalDate): Flow<Boolean>
-
-    /** 某天还剩几件待做 */
-    suspend fun countPending(date: LocalDate): Int
+    /**
+     * 某天全部「还在」的事，含已完成、不含已删除。
+     *
+     * 顺序就是用户自己排的顺序 —— 界面不再做二次排序，
+     * 免得勾掉一件列表就跳一下。
+     */
+    fun observeActive(date: LocalDate): Flow<List<Task>>
 
     /**
      * 添加一件要做的事。
-     * @return false 表示已达当日上限（或内容为空），未写入
+     *
+     * v0.2 起没有数量上限 —— 只校验内容非空。
+     * @return false 表示内容为空，未写入
      */
     suspend fun add(content: String, date: LocalDate): Boolean
 
     suspend fun complete(id: Long)
 
+    /** 取消完成，回到待做。清单上再点一次复选框就是它 */
+    suspend fun reopen(id: Long)
+
+    /** 从清单里去掉。软删除，不占位也不再显示 */
     suspend fun drop(id: Long)
+
+    /** 改掉某件事的文字。空内容会被忽略 */
+    suspend fun rename(id: Long, content: String)
+
+    /** 在自己所属那天的清单里上移或下移一位 */
+    suspend fun move(id: Long, direction: MoveDirection)
 
     /** 导出全部数据为纯文本 —— 本地存储唯一的后悔药 */
     suspend fun exportAll(): String
 }
+
+enum class MoveDirection { UP, DOWN }

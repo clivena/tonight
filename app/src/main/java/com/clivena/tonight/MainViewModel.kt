@@ -4,7 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.clivena.tonight.data.TaskRepository
-import com.clivena.tonight.util.DateUtil
+import com.clivena.tonight.domain.TaskStatus
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -12,50 +12,34 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 
-/** App 此刻该显示哪一屏 */
-enum class Screen {
-    /** 今晚屏：规划 */
-    EVENING,
+/** App 的两个面：看今天的，和排以后要做的 */
+enum class Tab { TODAY, PLAN }
 
-    /** 明早屏：执行 */
-    MORNING,
-
-    /** 今天的事全做完了 */
-    ALL_DONE,
-
-    /** 今晚的规划保存完了 */
-    GOOD_NIGHT
-}
-
+/**
+ * 只做一件事：决定此刻显示哪个 Tab。
+ *
+ * v0.1 里这里是个四屏枚举，还有一条「规划完只能看晚安」的单行道。
+ * v0.2 拆掉了：两个 Tab 常驻可互达，任何时刻都能从「今天」走到「规划」再走回来。
+ */
 class MainViewModel(private val repository: TaskRepository) : ViewModel() {
 
-    private val _screen = MutableStateFlow<Screen?>(null)
+    private val _tab = MutableStateFlow<Tab?>(null)
 
-    /** null 表示还在判断（第一帧） */
-    val screen: StateFlow<Screen?> = _screen.asStateFlow()
-
-    /** 今晚屏要规划哪一天 */
-    val planDate: LocalDate = DateUtil.planDateFor()
+    /** null 表示还在读数据库判断落点（第一帧，先留白） */
+    val tab: StateFlow<Tab?> = _tab.asStateFlow()
 
     init {
         viewModelScope.launch {
             val today = LocalDate.now()
-            val pending = repository.observePending(today).first()
-            // 今天还有没做完的 → 先去做完；否则 → 规划
-            _screen.value = if (pending.isEmpty()) Screen.EVENING else Screen.MORNING
+            val hasPending = repository.observeActive(today).first()
+                .any { it.status == TaskStatus.PENDING }
+            // 今天还有没做完的 → 先看今天；否则 → 直接去规划
+            _tab.value = if (hasPending) Tab.TODAY else Tab.PLAN
         }
     }
 
-    fun onPlanSaved() {
-        _screen.value = Screen.GOOD_NIGHT
-    }
-
-    fun onAllDone() {
-        _screen.value = Screen.ALL_DONE
-    }
-
-    fun onPlan() {
-        _screen.value = Screen.EVENING
+    fun selectTab(tab: Tab) {
+        _tab.value = tab
     }
 
     companion object {
