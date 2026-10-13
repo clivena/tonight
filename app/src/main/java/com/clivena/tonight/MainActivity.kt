@@ -12,7 +12,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.clivena.tonight.data.ExpenseRepository
 import com.clivena.tonight.data.TaskRepository
+import com.clivena.tonight.ui.ledger.LedgerScreen
+import com.clivena.tonight.ui.ledger.LedgerViewModel
 import com.clivena.tonight.ui.plan.PlanScreen
 import com.clivena.tonight.ui.plan.PlanViewModel
 import com.clivena.tonight.ui.today.TodayScreen
@@ -26,19 +29,22 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        val repository = (application as TonightApp).repository
-        setContent { TonightRoot(repository) }
+        val app = application as TonightApp
+        setContent { TonightRoot(app.repository, app.expenseRepository) }
     }
 }
 
 /**
  * 全 App 的路由。
  *
- * 没有引入 Navigation 库 —— 只有两个 Tab，一个 when 就够了。
+ * 没有引入 Navigation 库 —— 只有三个 Tab，一个 when 就够了。
  * 引库的收益是零，成本是几十 KB 加一层抽象。
  */
 @Composable
-private fun TonightRoot(repository: TaskRepository) {
+private fun TonightRoot(
+    repository: TaskRepository,
+    expenseRepository: ExpenseRepository
+) {
 
     val mainViewModel: MainViewModel = viewModel(
         factory = MainViewModel.factory(repository)
@@ -70,6 +76,17 @@ private fun TonightRoot(repository: TaskRepository) {
             )
             PlanScreen(
                 viewModel = planViewModel,
+                onSelectTab = mainViewModel::selectTab
+            )
+        }
+
+        Tab.LEDGER -> {
+            val ledgerViewModel: LedgerViewModel = viewModel(
+                key = "ledger",
+                factory = LedgerViewModel.factory(expenseRepository)
+            )
+            LedgerScreen(
+                viewModel = ledgerViewModel,
                 onSelectTab = mainViewModel::selectTab
             )
         }

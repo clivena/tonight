@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.clivena.tonight.Tab
 import com.clivena.tonight.domain.Task
+import com.clivena.tonight.ui.components.RowAction
 import com.clivena.tonight.ui.components.TopTabs
 import com.clivena.tonight.ui.theme.TonightTheme
 import com.clivena.tonight.util.DateUtil
@@ -287,27 +288,6 @@ private fun PlanRow(
         RowAction("↓", enabled = canMoveDown, onClick = onMoveDown)
         RowAction("×", enabled = true, onClick = onDelete)
     }
-}
-
-@Composable
-private fun RowAction(
-    label: String,
-    enabled: Boolean,
-    onClick: () -> Unit
-) {
-    Text(
-        text = label,
-        style = MaterialTheme.typography.bodyMedium,
-        color = if (enabled) {
-            MaterialTheme.colorScheme.onSurfaceVariant
-        } else {
-            MaterialTheme.colorScheme.outline
-        },
-        modifier = Modifier
-            .clip(RoundedCornerShape(6.dp))
-            .clickable(enabled = enabled, onClick = onClick)
-            .padding(horizontal = 7.dp, vertical = 6.dp)
-    )
 }
 
 @Composable

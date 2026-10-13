@@ -12,14 +12,18 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 
-/** App 的两个面：看今天的，和排以后要做的 */
-enum class Tab { TODAY, PLAN }
+/** App 的三个面：看今天的、排以后要做的、记花了多少的 */
+enum class Tab { TODAY, PLAN, LEDGER }
 
 /**
  * 只做一件事：决定此刻显示哪个 Tab。
  *
  * v0.1 里这里是个四屏枚举，还有一条「规划完只能看晚安」的单行道。
- * v0.2 拆掉了：两个 Tab 常驻可互达，任何时刻都能从「今天」走到「规划」再走回来。
+ * v0.2 拆掉了，v0.3 又加回来一个「记账」——
+ * 但性质完全不同：这次不是流水线的一环，而是一个随时可进可出的独立模块。
+ *
+ * 值得注意的是这里**没有**把记账写进落点判断：
+ * 打开 App 时该看今天还是去规划，和记不记账无关。
  */
 class MainViewModel(private val repository: TaskRepository) : ViewModel() {
 

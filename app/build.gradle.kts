@@ -13,8 +13,8 @@ android {
         applicationId = "com.clivena.tonight"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2
-        versionName = "0.2.0"
+        versionCode = 3
+        versionName = "0.3.0"
     }
 
     buildTypes {
@@ -39,6 +39,20 @@ android {
     buildFeatures {
         compose = true
     }
+}
+
+/**
+ * Room 的 schema 导出目录。
+ *
+ * 每编译一次，就生成一份「数据库此刻应该长什么样」的机器可读基准
+ * （app/schemas/com.clivena.tonight.data.local.AppDatabase/2.json）。
+ * 手写迁移 SQL 时必须逐字对照它 —— 这是在没有模拟器的机器上
+ * 唯一能自证「迁移结果与 Entity 期望一致」的手段。
+ *
+ * 该目录要提交进版本库：将来 v3、v4 的迁移都要拿它当基准。
+ */
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
 }
 
 dependencies {

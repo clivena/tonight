@@ -1,9 +1,14 @@
 package com.clivena.tonight.util
 
+import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
+import java.time.temporal.TemporalAdjusters
 import java.util.Locale
+
+/** 一个闭区间 —— 两端都含 */
+data class DateRange(val first: LocalDate, val last: LocalDate)
 
 object DateUtil {
 
@@ -34,4 +39,20 @@ object DateUtil {
 
     /** 副标题用：10月12日 星期一 */
     fun fullLabel(date: LocalDate): String = date.format(FULL_DATE)
+
+    /**
+     * 这一周，**周一为一周之始**。
+     *
+     * 不用「周日开始」：发工资、还信用卡、看账单的周期都是周一，
+     * 「本周花了多少」必须和用户脑子里的那个「本周」是同一个区间，
+     * 否则数字对上了，直觉对不上。
+     */
+    fun weekRange(date: LocalDate): DateRange {
+        val monday = date.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
+        return DateRange(monday, monday.plusDays(6))
+    }
+
+    /** 这一月，1 号到月末 */
+    fun monthRange(date: LocalDate): DateRange =
+        DateRange(date.withDayOfMonth(1), date.with(TemporalAdjusters.lastDayOfMonth()))
 }

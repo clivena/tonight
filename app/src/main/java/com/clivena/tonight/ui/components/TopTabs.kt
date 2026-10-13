@@ -22,11 +22,11 @@ import androidx.compose.ui.unit.dp
 import com.clivena.tonight.Tab
 
 /**
- * 「今天 / 规划」切换栏。
+ * 「今天 / 规划 / 记账」切换栏。
  *
  * 它渲染在各自屏幕的主题里 —— 所以切到「规划」时，
  * 整条栏连同背景一起由浅转深。这个明暗跳变是有意的：
- * 白天和夜里本来就该是两种气质。
+ * 白天和夜里本来就该是两种气质，三栏里只有「规划」是夜里那一面。
  */
 @Composable
 fun TopTabs(
@@ -41,8 +41,10 @@ fun TopTabs(
         verticalAlignment = Alignment.CenterVertically
     ) {
         TabItem("今天", active == Tab.TODAY) { onSelect(Tab.TODAY) }
-        Spacer(Modifier.width(22.dp))
+        Spacer(Modifier.width(20.dp))
         TabItem("规划", active == Tab.PLAN) { onSelect(Tab.PLAN) }
+        Spacer(Modifier.width(20.dp))
+        TabItem("记账", active == Tab.LEDGER) { onSelect(Tab.LEDGER) }
     }
 }
 
