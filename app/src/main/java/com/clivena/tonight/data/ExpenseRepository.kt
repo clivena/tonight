@@ -2,8 +2,10 @@ package com.clivena.tonight.data
 
 import com.clivena.tonight.domain.Expense
 import com.clivena.tonight.domain.LedgerTotals
+import com.clivena.tonight.domain.MonthLedger
 import kotlinx.coroutines.flow.Flow
 import java.time.LocalDate
+import java.time.YearMonth
 
 /**
  * 记账数据的唯一出口。
@@ -23,6 +25,14 @@ interface ExpenseRepository {
      * 汇总卡仍要锚定在真正的今天，不能跟着明细一起往回走。
      */
     fun observeTotals(anchor: LocalDate): Flow<LedgerTotals>
+
+    /**
+     * 某个整月的按日合计，给月历用。
+     *
+     * 和 [observeTotals] 是两种东西：那个回答「此刻花了多少」，
+     * 这个回答「那个月每天各花了多少」。
+     */
+    fun observeMonth(month: YearMonth): Flow<MonthLedger>
 
     /**
      * 记一笔。

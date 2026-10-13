@@ -5,6 +5,17 @@ import androidx.room.Insert
 import androidx.room.Query
 import kotlinx.coroutines.flow.Flow
 
+/**
+ * 按月聚合出来的一行：某一天花了多少。
+ *
+ * 只有**有花销的那些天**会出现在结果里 —— 没花销的天不必占位，
+ * 月历那边查不到就是「这天没花钱」，语义和缺省值天然一致。
+ */
+data class DailyTotalRow(
+    val date: String,
+    val amountCents: Long
+)
+
 @Dao
 interface ExpenseDao {
 
@@ -23,6 +34,22 @@ interface ExpenseDao {
      */
     @Query("SELECT SUM(amountCents) FROM expenses WHERE date BETWEEN :from AND :to")
     fun observeSum(from: String, to: String): Flow<Long?>
+
+    /**
+     * 一个区间里**每天**的合计，用于月历。
+     *
+     * 用 GROUP BY 让 SQLite 干分组，而不是把整月明细查回来在内存里 groupBy ——
+     * 记账是「长期只增不减」的数据，一年就是几千行，
+     * 月历只需要 31 个数字，没必要为它把明细全捞上来。
+     *
+     * 因为带 GROUP BY，没有记录时是「没有行」，而不是「一行 NULL」，
+     * 所以这里的 amountCents 可以是非空的 Long。
+     */
+    @Query(
+        "SELECT date, SUM(amountCents) AS amountCents FROM expenses " +
+            "WHERE date BETWEEN :from AND :to GROUP BY date ORDER BY date"
+    )
+    fun observeDailyTotals(from: String, to: String): Flow<List<DailyTotalRow>>
 
     @Insert
     suspend fun insert(expense: ExpenseEntity): Long

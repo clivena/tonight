@@ -4,6 +4,7 @@ import java.math.BigDecimal
 import java.math.RoundingMode
 import java.util.Locale
 import kotlin.math.abs
+import kotlin.math.roundToLong
 
 /**
  * 金额换算。
@@ -22,6 +23,28 @@ object MoneyUtil {
         val abs = abs(cents)
         val body = String.format(Locale.US, "%d.%02d", abs / 100, abs % 100)
         return if (negative) "-¥$body" else "¥$body"
+    }
+
+    /**
+     * 月历格子里的紧凑写法 —— 那里只有一格宽，放不下 "¥128.50"。
+     *
+     * 12800 → "128"      只到元，分直接丢掉
+     * 128000 → "1.3k"    上千就换单位，否则五个数字会把格子撑破
+     *
+     * 丢掉的分**只影响这一个格子的观感**，合计和明细仍然精确到分 ——
+     * 月历是拿来看分布的，不是拿来对账的，对账有明细和汇总。
+     */
+    fun formatCompact(cents: Long): String {
+        val yuan = cents / 100
+        if (yuan < 1000L) return yuan.toString()
+        val thousands = yuan / 1000.0
+        return if (thousands < 9.95) {
+            // 9.94 → "9.9k"，四舍五入到一位小数
+            String.format(Locale.US, "%.1fk", (thousands * 10).roundToLong() / 10.0)
+        } else {
+            // 9.95 起进位到整数，否则会出现 "10.0k" 这种多余的写法
+            "${thousands.roundToLong()}k"
+        }
     }
 
     /**

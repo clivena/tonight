@@ -4,11 +4,13 @@ import com.clivena.tonight.data.local.ExpenseDao
 import com.clivena.tonight.data.local.ExpenseEntity
 import com.clivena.tonight.domain.Expense
 import com.clivena.tonight.domain.LedgerTotals
+import com.clivena.tonight.domain.MonthLedger
 import com.clivena.tonight.util.DateUtil
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import java.time.LocalDate
+import java.time.YearMonth
 
 class LocalExpenseRepository(private val dao: ExpenseDao) : ExpenseRepository {
 
@@ -28,6 +30,17 @@ class LocalExpenseRepository(private val dao: ExpenseDao) : ExpenseRepository {
         ) { d, w, m ->
             LedgerTotals(todayCents = d ?: 0L, weekCents = w ?: 0L, monthCents = m ?: 0L)
         }
+    }
+
+    override fun observeMonth(month: YearMonth): Flow<MonthLedger> {
+        val range = DateUtil.monthRange(month)
+        return dao.observeDailyTotals(range.first.toString(), range.last.toString())
+            .map { rows ->
+                MonthLedger(
+                    month = month,
+                    dailyTotals = rows.associate { LocalDate.parse(it.date) to it.amountCents }
+                )
+            }
     }
 
     override suspend fun add(amountCents: Long, note: String, date: LocalDate): Boolean {
