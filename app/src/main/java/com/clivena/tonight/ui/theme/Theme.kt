@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -12,43 +13,61 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
 
 /*
- * 这里不调用 isSystemInDarkTheme()。
+ * 这里仍然不调用 isSystemInDarkTheme()。
  *
- * 明暗不是「偏好」，2026-10 之后也不再是「功能」：
- * 全 App 一个背景色，四个 Tab 共用同一档。色系仍然由用户在设置里选。
+ * 明暗由用户那个开关决定，不由系统的深色设置决定 ——
+ * 系统的深色管整个手机，这个开关只管这四个 Tab，两个口径混在一起，
+ * 就会出现「我明明关掉了它却还是黑的」这种找不到原因的事。
  *
- * 之前「规划」单独走深档，理由是睡前低刺激 —— 但四个 Tab 里三个是浅的，
- * 每次切到规划屏整屏翻黑，反而比配色不统一更打眼。
- * 一个「统一」的界面里不该有一个例外，哪怕那个例外有道理。
- *
- * Tone 里的 night 那一档没有删：想恢复某屏的深色，给它传 night=true 就行，
- * 数据层不用动。
+ * 历史：
+ *   · v0.6 规划屏单独走深档（睡前低刺激）
+ *   · v0.6.1 撤掉 —— 四个 Tab 里只有它翻黑，切过去像进了另一个 App
+ *   · v0.7 重新有夜间模式，但这次是**用户按的**，四个 Tab 同时变
  */
 
 /**
  * 全 App 唯一的主题入口。
  *
- * [background] 是用户选的自定义背景图，四个 Tab 都铺 ——
- * 既然是「统一」，就不能有一屏偷偷用纯色。
+ * [night] 来自用户在顶栏点的那个月亮，不是按 Tab 推算的。
+ * 一个开关管全部四屏，切 Tab 时底色不会跳 —— 这是 v0.6.1 定下的原则，
+ * 夜间模式不能把它破坏掉。
+ *
+ * [background] 是用户选的自定义背景图，日夜都铺：
+ * 夜里只是把遮罩压得更重，而不是把图拿掉。给夜间单独开一个例外，
+ * 等于又一次「某一屏偷偷不一样」。
  */
 @Composable
 fun TonightTheme(
     palette: Palette,
+    night: Boolean = false,
     background: ImageBitmap? = null,
     content: @Composable () -> Unit
 ) {
-    val tone = palette.light
+    val tone = if (night) palette.night else palette.light
 
-    val colorScheme = lightColorScheme(
-        primary = tone.accent,
-        onPrimary = tone.surface,
-        background = tone.background,
-        surface = tone.surface,
-        onBackground = tone.textPrimary,
-        onSurface = tone.textPrimary,
-        onSurfaceVariant = tone.textSecondary,
-        outline = tone.outline
-    )
+    val colorScheme = if (night) {
+        darkColorScheme(
+            primary = tone.accent,
+            onPrimary = tone.background,
+            background = tone.background,
+            surface = tone.surface,
+            onBackground = tone.textPrimary,
+            onSurface = tone.textPrimary,
+            onSurfaceVariant = tone.textSecondary,
+            outline = tone.outline
+        )
+    } else {
+        lightColorScheme(
+            primary = tone.accent,
+            onPrimary = tone.surface,
+            background = tone.background,
+            surface = tone.surface,
+            onBackground = tone.textPrimary,
+            onSurface = tone.textPrimary,
+            onSurfaceVariant = tone.textSecondary,
+            outline = tone.outline
+        )
+    }
 
     MaterialTheme(colorScheme = colorScheme, typography = TonightTypography) {
         // 底色永远由主题层自己铺。各屏的 Surface 改成透明，
@@ -66,12 +85,15 @@ fun TonightTheme(
                     modifier = Modifier.fillMaxSize()
                 )
                 // 遮罩不是「好看」，是「能用」：任何一张照片的明暗分布都是随机的，
-                // 不压一层背景色，正文对比度就没法保证。0.88 是「图还看得见、
-                // 字一定读得清」的那个位置。
+                // 不压一层背景色，正文对比度就没法保证。
+                //
+                // 白天 0.88 是「图还看得见、字一定读得清」的那个位置。
+                // 夜里要更重：目的就是低刺激，留 7% 的图当纹理就够，
+                // 再透下去就会有局部高光把那块字压得读不清。
                 Box(
                     Modifier
                         .fillMaxSize()
-                        .background(tone.background.copy(alpha = 0.88f))
+                        .background(tone.background.copy(alpha = if (night) 0.93f else 0.88f))
                 )
             }
             content()

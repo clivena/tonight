@@ -29,7 +29,7 @@ import com.clivena.tonight.util.DateUtil
 import java.time.LocalDate
 
 /**
- * 「今天」屏 —— 浅色档。
+ * 「今天」屏 —— 明暗跟随顶栏那个月亮开关。
  *
  * 一条规则：**清单怎么排就怎么显示**。不做二次排序，勾完也不往下沉。
  * 列表自己会跳的界面，人是记不住自己排的顺序的。

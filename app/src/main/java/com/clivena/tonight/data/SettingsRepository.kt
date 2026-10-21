@@ -34,12 +34,28 @@ class SettingsRepository(context: Context) {
     private val _backgroundName = MutableStateFlow(prefs.getString(KEY_BACKGROUND, null))
     val backgroundName: StateFlow<String?> = _backgroundName.asStateFlow()
 
+    /**
+     * 夜间模式。
+     *
+     * 默认关 —— 这个 App 的主场景是白天勾清单，夜间是少数时候。
+     * 不做「跟随系统」：系统的深色设置管的是整个手机，而这一个开关管的是
+     * 四个 Tab 的底色，两者口径不同。跟随系统会让「我明明关了它却变黑了」
+     * 这种事发生，而用户找不到原因。
+     */
+    private val _nightMode = MutableStateFlow(prefs.getBoolean(KEY_NIGHT, false))
+    val nightMode: StateFlow<Boolean> = _nightMode.asStateFlow()
+
     private val _tags = MutableStateFlow(readTags())
     val tags: StateFlow<List<String>> = _tags.asStateFlow()
 
     fun setPalette(name: String) {
         _paletteName.value = name
         prefs.edit().putString(KEY_PALETTE, name).apply()
+    }
+
+    fun setNightMode(on: Boolean) {
+        _nightMode.value = on
+        prefs.edit().putBoolean(KEY_NIGHT, on).apply()
     }
 
     fun setBackgroundName(name: String?) {
@@ -100,6 +116,7 @@ class SettingsRepository(context: Context) {
     companion object {
         private const val KEY_PALETTE = "palette"
         private const val KEY_BACKGROUND = "background"
+        private const val KEY_NIGHT = "night_mode"
         private const val KEY_TAGS = "note_tags"
 
         private const val MAX_TAG_LENGTH = 8

@@ -41,17 +41,21 @@ import com.clivena.tonight.BuildConfig
 import com.clivena.tonight.Tab
 import com.clivena.tonight.ui.components.TopTabs
 import com.clivena.tonight.ui.ledger.TagManagerDialog
+import com.clivena.tonight.ui.theme.LocalNightMode
 import com.clivena.tonight.ui.theme.PaletteId
 import com.clivena.tonight.ui.theme.Palettes
 import com.clivena.tonight.util.ImageStore
 import kotlinx.coroutines.launch
 
 /**
- * 「设置」屏 —— 浅色档。
+ * 「设置」屏。
  *
  * 只有三件事可调：颜色、背景图、常用标签。
  * 没有「账号」「同步」「隐私协议」「默认页」这一类条目 ——
  * 这个 App 没有账号、不联网、只有一个用户，那些条目在这里没有对应物。
+ *
+ * 夜间开关不在这 —— 它放在顶栏。它天天要用，而且用的时机是
+ * 「现在光线不对」的那一刻，钻到设置里再翻就晚了。
  */
 @Composable
 fun SettingsScreen(
@@ -63,6 +67,7 @@ fun SettingsScreen(
     val backgroundName by viewModel.backgroundName.collectAsStateWithLifecycle()
     val tags by viewModel.tags.collectAsStateWithLifecycle()
     val active = PaletteId.fromName(paletteName)
+    val nightMode = LocalNightMode.current
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -120,7 +125,10 @@ fun SettingsScreen(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Palettes.ALL.forEach { palette ->
                         Swatch(
-                            color = palette.light.accent,
+                            // 色点显示的是**当前模式下实际会用到**的那个主色。
+                            // 夜间档的主色是提亮过的，如果一直显示浅档的色值，
+                            // 用户会选完发现界面颜色和刚点的那个不是一回事。
+                            color = if (nightMode) palette.night.accent else palette.light.accent,
                             selected = palette.id == active,
                             onClick = { viewModel.setPalette(palette.id.name) }
                         )
@@ -137,7 +145,7 @@ fun SettingsScreen(
                 Spacer(Modifier.height(8.dp))
 
                 Text(
-                    text = "规划屏会用同一主色的深档 —— 睡前那一面仍然是暗的。",
+                    text = "换色板时四个面一起变。想更暗，点顶栏那个月亮。",
                     style = MaterialTheme.typography.bodyMedium.copy(
                         fontSize = 12.sp,
                         lineHeight = 18.sp
@@ -153,9 +161,9 @@ fun SettingsScreen(
 
                 Text(
                     text = if (backgroundName == null) {
-                        "现在用的是纯色底。选一张图会铺在四个屏下面，并压一层浅色遮罩保证字能看清。"
+                        "现在用的是纯色底。选一张图会铺在每个 Tab 下面，并压一层遮罩保证字能看清。"
                     } else {
-                        "已设置一张图片。规划屏不铺图 —— 睡前那一面保持纯色。"
+                        "已设置一张图片。夜间模式下遮罩会加厚，图还在，但只剩一层淡纹理。"
                     },
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant

@@ -52,7 +52,7 @@ import java.time.LocalDate
 import java.time.YearMonth
 
 /**
- * 「记账」屏 —— 浅色档。
+ * 「记账」屏 —— 明暗跟随顶栏那个月亮开关。
  *
  * 主题由顶层统一提供（v0.6 起），本屏不再自己包一层 Theme：
  * 换色板时只需要动 [com.clivena.tonight.ui.theme.TonightTheme]，四屏一起变。

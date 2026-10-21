@@ -19,18 +19,24 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.clivena.tonight.Tab
+import com.clivena.tonight.ui.theme.LocalNightMode
+import com.clivena.tonight.ui.theme.LocalToggleNightMode
 
 /**
- * 「今天 / 规划 / 记账 / 日记」+ 右侧「设置」。
+ * 「今天 / 规划 / 记账 / 日记」+ 右侧「☾ 夜间」+「设置」。
  *
  * 设置**不做成第五个 Tab**：Tab 是内容，设置是配置。
  * 把配置摆在和内容同级的位置，会让顶部导航看起来有五个平等的目的地，
  * 而实际上用户一年点不进设置几次。
  *
- * 它渲染在各自屏幕的主题里 —— 所以切到「规划」时，
- * 整条栏连同背景一起由浅转深。这个明暗跳变是有意的：
- * 白天和夜里本来就该是两种气质，四栏里只有「规划」是夜里那一面。
+ * 夜间开关反过来 —— 它**值得常驻**。因为它会天天用，而且用的时机
+ * 恰恰是「现在这一刻光线不对」，那会儿再钻进设置去翻，就来不及了。
+ * 它占的位置很小（一个符号），但省掉的是一次三级跳。
+ *
+ * 顶栏本身渲染在主题里，所以开了夜间模式它也跟着变 ——
+ * 不需要另外给它配一套颜色。
  */
 @Composable
 fun TopTabs(
@@ -55,6 +61,9 @@ fun TopTabs(
 
         Spacer(Modifier.weight(1f))
 
+        NightToggle()
+        Spacer(Modifier.width(10.dp))
+
         Text(
             text = "设置",
             style = MaterialTheme.typography.bodyMedium,
@@ -67,6 +76,46 @@ fun TopTabs(
                 .clip(RoundedCornerShape(6.dp))
                 .clickable(onClick = onSettings)
                 .padding(horizontal = 4.dp, vertical = 6.dp)
+        )
+    }
+}
+
+/**
+ * 夜间开关。
+ *
+ * 符号**固定是月亮**，不随状态换成太阳 —— 换成太阳，用户就得先想
+ * 「这个太阳是表示现在，还是表示点一下会变成什么」，而这题没有标准答案。
+ * 一个符号 + 两种亮度（灰 = 关，主色 + 淡底 = 开），没有理解成本。
+ *
+ * 用文字符号而不是图标库，和 [RowAction] 是同一个理由：
+ * 省一个依赖，而且符号本来就是最适合这里的东西。
+ */
+@Composable
+private fun NightToggle() {
+    val night = LocalNightMode.current
+    val toggle = LocalToggleNightMode.current
+
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(6.dp))
+            .background(
+                if (night) {
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
+                } else {
+                    Color.Transparent
+                }
+            )
+            .clickable(onClick = toggle)
+            .padding(horizontal = 8.dp, vertical = 5.dp)
+    ) {
+        Text(
+            text = "☾",
+            style = MaterialTheme.typography.bodyMedium.copy(fontSize = 15.sp),
+            color = if (night) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            }
         )
     }
 }
