@@ -64,10 +64,11 @@ class MainActivity : ComponentActivity() {
  *
  * v0.6 之前每个 Screen 各自包一层 Theme（「规划」用深色、其余用浅色）。
  * 换色板时那种写法要改四处、还容易漏。现在收到这一层：
- * **明暗由当前 Tab 决定，色系由用户的选择决定，四个屏共用一份。**
+ * **色系由用户的选择决定，四个 Tab 共用一份，背景色完全一致。**
  *
- * 代价是各屏不能再自己决定明暗 —— 这是有意的，
- * 「哪一屏该是暗的」本来就该是一个全局判断，而不是四份局部约定。
+ * 代价是各屏不能再自己决定明暗 —— 这是有意的。
+ * 也正因为收到了这一层，「统一背景」只需要删掉一个按 Tab 判断的分支，
+ * 而不用去四个屏里各改一遍。
  */
 @Composable
 private fun TonightRoot(
@@ -85,15 +86,13 @@ private fun TonightRoot(
     val backgroundName by settings.backgroundName.collectAsStateWithLifecycle()
 
     val palette = Palettes.of(PaletteId.fromName(paletteName))
-    // 只有「规划」是深档：睡前那一面低刺激，其余三屏白天要一眼看清
-    val night = tab == Tab.PLAN
 
     val context = LocalContext.current
     val background by produceState<ImageBitmap?>(null, backgroundName) {
         value = ImageStore.load(context, ImageStore.DIR_THEME, backgroundName)
     }
 
-    TonightTheme(palette = palette, night = night, background = background) {
+    TonightTheme(palette = palette, background = background) {
         when (tab) {
 
             // 第一帧：还在读数据库判断该去哪，先留白

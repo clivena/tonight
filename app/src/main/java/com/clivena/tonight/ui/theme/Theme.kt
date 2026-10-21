@@ -5,7 +5,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -13,56 +12,43 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
 
 /*
- * 这里仍然不调用 isSystemInDarkTheme()。
+ * 这里不调用 isSystemInDarkTheme()。
  *
- * 明暗在这个产品里是「功能」，不是「偏好」：
- *   · 规划屏走深档 —— 睡前低刺激
- *   · 其余走浅档 —— 白天一眼看清
+ * 明暗不是「偏好」，2026-10 之后也不再是「功能」：
+ * 全 App 一个背景色，四个 Tab 共用同一档。色系仍然由用户在设置里选。
  *
- * v0.6 改的是「色系」而不是「明暗」：
- * 以前两档各自写死（浅档蓝灰、深档无彩深灰），切 Tab 时是从一个色系跳到另一个；
- * 现在两档出自同一套 [Palette]，切 Tab 看到的是同一个颜色的明暗变化。
+ * 之前「规划」单独走深档，理由是睡前低刺激 —— 但四个 Tab 里三个是浅的，
+ * 每次切到规划屏整屏翻黑，反而比配色不统一更打眼。
+ * 一个「统一」的界面里不该有一个例外，哪怕那个例外有道理。
+ *
+ * Tone 里的 night 那一档没有删：想恢复某屏的深色，给它传 night=true 就行，
+ * 数据层不用动。
  */
 
 /**
  * 全 App 唯一的主题入口。
  *
- * [night] 由调用方按当前屏决定 —— 只有「规划」是深档。
- * [background] 是用户选的自定义背景图，只在浅档生效：
- * 睡前那一面不该有任何画面刺激。
+ * [background] 是用户选的自定义背景图，四个 Tab 都铺 ——
+ * 既然是「统一」，就不能有一屏偷偷用纯色。
  */
 @Composable
 fun TonightTheme(
     palette: Palette,
-    night: Boolean,
     background: ImageBitmap? = null,
     content: @Composable () -> Unit
 ) {
-    val tone = if (night) palette.night else palette.light
+    val tone = palette.light
 
-    val colorScheme = if (night) {
-        darkColorScheme(
-            primary = tone.accent,
-            onPrimary = tone.background,
-            background = tone.background,
-            surface = tone.surface,
-            onBackground = tone.textPrimary,
-            onSurface = tone.textPrimary,
-            onSurfaceVariant = tone.textSecondary,
-            outline = tone.outline
-        )
-    } else {
-        lightColorScheme(
-            primary = tone.accent,
-            onPrimary = tone.surface,
-            background = tone.background,
-            surface = tone.surface,
-            onBackground = tone.textPrimary,
-            onSurface = tone.textPrimary,
-            onSurfaceVariant = tone.textSecondary,
-            outline = tone.outline
-        )
-    }
+    val colorScheme = lightColorScheme(
+        primary = tone.accent,
+        onPrimary = tone.surface,
+        background = tone.background,
+        surface = tone.surface,
+        onBackground = tone.textPrimary,
+        onSurface = tone.textPrimary,
+        onSurfaceVariant = tone.textSecondary,
+        outline = tone.outline
+    )
 
     MaterialTheme(colorScheme = colorScheme, typography = TonightTypography) {
         // 底色永远由主题层自己铺。各屏的 Surface 改成透明，
@@ -72,7 +58,7 @@ fun TonightTheme(
                 .fillMaxSize()
                 .background(tone.background)
         ) {
-            if (!night && background != null) {
+            if (background != null) {
                 Image(
                     bitmap = background,
                     contentDescription = null,
