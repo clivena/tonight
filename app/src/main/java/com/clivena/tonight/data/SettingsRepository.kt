@@ -35,6 +35,21 @@ class SettingsRepository(context: Context) {
     val backgroundName: StateFlow<String?> = _backgroundName.asStateFlow()
 
     /**
+     * 背景图的遮罩浓度：**数值越大，图越淡**（0.88 就是 v0.7 那个默认）。
+     *
+     * 存的是最终生效的 alpha，不是界面上那个「清晰度百分比」——
+     * 真正起作用的就是它，翻 prefs 一眼能看到几，不用反推。
+     * 滑杆往哪边拖是展示层的换算，放在设置屏里。
+     *
+     * 读的时候 clamp 一次：手改过 prefs、或者以后调整了范围，
+     * 都不该让底色变成全透明或纯色。
+     */
+    private val _backgroundDim = MutableStateFlow(
+        prefs.getFloat(KEY_BG_DIM, DEFAULT_BG_DIM).coerceIn(MIN_BG_DIM, MAX_BG_DIM)
+    )
+    val backgroundDim: StateFlow<Float> = _backgroundDim.asStateFlow()
+
+    /**
      * 夜间模式。
      *
      * 默认关 —— 这个 App 的主场景是白天勾清单，夜间是少数时候。
@@ -63,6 +78,19 @@ class SettingsRepository(context: Context) {
         prefs.edit().apply {
             if (name == null) remove(KEY_BACKGROUND) else putString(KEY_BACKGROUND, name)
         }.apply()
+    }
+
+    /**
+     * 调背景清晰度。
+     *
+     * 拖动时每帧都会调到这里，所以是 apply() 而不是 commit() ——
+     * apply 只把值写进内存并排一次异步落盘，不会卡住拖手感。
+     * 拖到一半杀进程也不会丢，因为最后一次 apply 已经排进队列。
+     */
+    fun setBackgroundDim(dim: Float) {
+        val value = dim.coerceIn(MIN_BG_DIM, MAX_BG_DIM)
+        _backgroundDim.value = value
+        prefs.edit().putFloat(KEY_BG_DIM, value).apply()
     }
 
     /**
@@ -116,8 +144,18 @@ class SettingsRepository(context: Context) {
     companion object {
         private const val KEY_PALETTE = "palette"
         private const val KEY_BACKGROUND = "background"
+        private const val KEY_BG_DIM = "bg_dim"
         private const val KEY_NIGHT = "night_mode"
         private const val KEY_TAGS = "note_tags"
+
+        /** 最清楚的一端：图透出约四分之一，显著但正文会发灰 */
+        const val MIN_BG_DIM = 0.75f
+
+        /** 最淡的一端：图只剩 4%，基本等于纯色底 */
+        const val MAX_BG_DIM = 0.96f
+
+        /** 默认对齐 v0.7 的那个值 —— 装完不动的话，看起来和上一版一模一样 */
+        const val DEFAULT_BG_DIM = 0.88f
 
         private const val MAX_TAG_LENGTH = 8
         private const val MAX_TAGS = 24

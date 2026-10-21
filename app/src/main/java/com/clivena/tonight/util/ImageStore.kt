@@ -38,7 +38,20 @@ object ImageStore {
      */
     fun newBackgroundName(): String = "background_${System.currentTimeMillis()}.jpg"
 
-    private const val MAX_DIMEN = 1600
+    /**
+     * 长边上限。
+     *
+     * 这个数不是「随便压一下省点空间」，它直接决定背景图看着清不清楚：
+     * 背景图是 `ContentScale.Crop` 铺满整屏的，铺满 1080×2400 的竖屏时，
+     * 一张 4:3 横图的**高**必须 >= 2400（即长边 >= 3200）才不需要放大。
+     *
+     * 以前是 1600 → 图高只有 1200，得放大 2 倍去铺屏，怎么调遮罩都是软的。
+     * 现在 2560 → 图高 1920，放大约 1.25 倍，肉眼基本看不出插值。
+     *
+     * 代价是内存：1600×1200 约 7.3MB，2560×1920 约 18.7MB（ARGB_8888）。
+     * 一张全屏背景换这个清晰度，值。
+     */
+    private const val MAX_DIMEN = 2560
     private const val JPEG_QUALITY = 85
 
     /** 目录：filesDir/<dir>/，不存在就建 */

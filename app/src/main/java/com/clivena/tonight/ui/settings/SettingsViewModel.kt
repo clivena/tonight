@@ -17,11 +17,14 @@ class SettingsViewModel(private val settings: SettingsRepository) : ViewModel() 
 
     val paletteName: StateFlow<String> = settings.paletteName
     val backgroundName: StateFlow<String?> = settings.backgroundName
+    val backgroundDim: StateFlow<Float> = settings.backgroundDim
     val tags: StateFlow<List<String>> = settings.tags
 
     fun setPalette(name: String) = settings.setPalette(name)
 
     fun setBackground(name: String?) = settings.setBackgroundName(name)
+
+    fun setBackgroundDim(dim: Float) = settings.setBackgroundDim(dim)
 
     fun addTag(tag: String): Boolean = settings.addTag(tag)
 

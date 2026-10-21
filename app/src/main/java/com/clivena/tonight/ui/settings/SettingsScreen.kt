@@ -22,6 +22,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -39,6 +41,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.clivena.tonight.BuildConfig
 import com.clivena.tonight.Tab
+import com.clivena.tonight.data.SettingsRepository
 import com.clivena.tonight.ui.components.TopTabs
 import com.clivena.tonight.ui.ledger.TagManagerDialog
 import com.clivena.tonight.ui.theme.LocalNightMode
@@ -65,6 +68,7 @@ fun SettingsScreen(
 ) {
     val paletteName by viewModel.paletteName.collectAsStateWithLifecycle()
     val backgroundName by viewModel.backgroundName.collectAsStateWithLifecycle()
+    val backgroundDim by viewModel.backgroundDim.collectAsStateWithLifecycle()
     val tags by viewModel.tags.collectAsStateWithLifecycle()
     val active = PaletteId.fromName(paletteName)
     val nightMode = LocalNightMode.current
@@ -163,7 +167,7 @@ fun SettingsScreen(
                     text = if (backgroundName == null) {
                         "现在用的是纯色底。选一张图会铺在每个 Tab 下面，并压一层遮罩保证字能看清。"
                     } else {
-                        "已设置一张图片。夜间模式下遮罩会加厚，图还在，但只剩一层淡纹理。"
+                        "已设置一张图片。下面这根滑杆决定它透出来多少。"
                     },
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -189,6 +193,16 @@ fun SettingsScreen(
                             viewModel.setBackground(null)
                         }
                     }
+                }
+
+                // 没有图的时候不显示滑杆 —— 一个「调了没反应」的控件
+                // 比没有这个控件更让人困惑。
+                if (backgroundName != null) {
+                    Spacer(Modifier.height(20.dp))
+                    ClaritySlider(
+                        dim = backgroundDim,
+                        onChange = viewModel::setBackgroundDim
+                    )
                 }
 
                 Spacer(Modifier.height(28.dp))
@@ -257,6 +271,100 @@ private fun SectionTitle(text: String) {
         style = MaterialTheme.typography.titleMedium,
         color = MaterialTheme.colorScheme.onBackground
     )
+}
+
+/**
+ * 背景清晰度滑杆。
+ *
+ * 滑杆上「清晰度」往右增大，而底层存的是「遮罩浓度」越大越淡 —— 两者反向。
+ * 换算只发生在这里，外面拿到的一直是清晰度 0..1，
+ * 交回数据层之前才翻成 alpha。这样调方向的时候只改一处。
+ *
+ * 不做「日夜两个滑杆」：用户要表达的只有一句「图该清楚到什么程度」，
+ * 夜里自动退一档就够了，让同一件事理解两遍没有收益。
+ */
+@Composable
+private fun ClaritySlider(dim: Float, onChange: (Float) -> Unit) {
+    val span = SettingsRepository.MAX_BG_DIM - SettingsRepository.MIN_BG_DIM
+    // 0 = 最淡，1 = 最清楚
+    val clarity = ((SettingsRepository.MAX_BG_DIM - dim) / span).coerceIn(0f, 1f)
+
+    Column {
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "清晰度",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+            // 显示一个定性词而不是百分比：百分比会被读成「清晰度只有 38%」，
+            // 而真实含义是「遮罩浓度 88%」——那种数字只会让人想凑个整。
+            Text(
+                text = when {
+                    clarity < 0.34f -> "偏淡"
+                    clarity < 0.67f -> "适中"
+                    else -> "清楚"
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        Slider(
+            value = clarity,
+            onValueChange = { v -> onChange(SettingsRepository.MAX_BG_DIM - v * span) },
+            valueRange = 0f..1f,
+            colors = SliderDefaults.colors(
+                thumbColor = MaterialTheme.colorScheme.primary,
+                activeTrackColor = MaterialTheme.colorScheme.primary,
+                inactiveTrackColor = MaterialTheme.colorScheme.outline
+            ),
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = "淡",
+                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 11.sp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = "清楚",
+                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 11.sp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        Spacer(Modifier.height(10.dp))
+
+        Text(
+            text = "往右拖，背景图更清楚；夜里会自动再淡一点。",
+            style = MaterialTheme.typography.bodyMedium.copy(
+                fontSize = 12.sp,
+                lineHeight = 18.sp
+            ),
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        Spacer(Modifier.height(4.dp))
+
+        // 这条是真话，不说会让人白调半天：分辨率是导入那一刻定下的，
+        // 滑杆只调遮罩，动不了旧文件的像素。
+        Text(
+            text = "以前选过的图是按较低分辨率存的，觉得糊就重新选一次。",
+            style = MaterialTheme.typography.bodyMedium.copy(
+                fontSize = 11.sp,
+                lineHeight = 17.sp
+            ),
+            color = MaterialTheme.colorScheme.outline
+        )
+    }
 }
 
 /**

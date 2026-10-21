@@ -92,6 +92,7 @@ private fun TonightRoot(
 
     val paletteName by settings.paletteName.collectAsStateWithLifecycle()
     val backgroundName by settings.backgroundName.collectAsStateWithLifecycle()
+    val backgroundDim by settings.backgroundDim.collectAsStateWithLifecycle()
     val nightMode by settings.nightMode.collectAsStateWithLifecycle()
 
     val palette = Palettes.of(PaletteId.fromName(paletteName))
@@ -114,6 +115,8 @@ private fun TonightRoot(
     }
 
     val context = LocalContext.current
+    // 只在换了图片文件时重新解码。拖清晰度滑杆不碰这里 ——
+    // 那只改遮罩的 alpha，图本身不动，所以不需要重新读一遍磁盘。
     val background by produceState<ImageBitmap?>(null, backgroundName) {
         value = ImageStore.load(context, ImageStore.DIR_THEME, backgroundName)
     }
@@ -128,7 +131,12 @@ private fun TonightRoot(
         LocalNightMode provides nightMode,
         LocalToggleNightMode provides toggleNight
     ) {
-        TonightTheme(palette = palette, night = nightMode, background = background) {
+        TonightTheme(
+            palette = palette,
+            night = nightMode,
+            background = background,
+            backgroundDim = backgroundDim
+        ) {
             when (tab) {
 
                 // 第一帧：还在读数据库判断该去哪，先留白
