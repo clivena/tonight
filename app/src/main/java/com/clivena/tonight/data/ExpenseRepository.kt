@@ -35,6 +35,15 @@ interface ExpenseRepository {
     fun observeMonth(month: YearMonth): Flow<MonthLedger>
 
     /**
+     * 常用备注，给「记一笔」做一键填入。
+     *
+     * 它是从账目本身算出来的，不是用户维护的标签体系 ——
+     * 记的账越多，标签越贴合自己的习惯，而用户一次都不用整理。
+     * 没有记录时返回空列表，由界面决定要不要给兜底。
+     */
+    fun observeNoteChips(limit: Int = 8): Flow<List<String>>
+
+    /**
      * 记一笔。
      *
      * 金额必须为正 —— @return false 表示金额非法（<=0）或写入被拒。

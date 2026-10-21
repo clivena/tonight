@@ -39,6 +39,9 @@ enum class LedgerMode { RECORD, BROWSE }
  *    日期动了（明细翻页、点月历某天）才会带动月份。
  * 5. **月历点某一天，直接落到那天的明细上**。这是「翻完账顺手补一笔」
  *    的自然路径，所以点完不只是高亮，而是把输入框也带过去。
+ * 6. **备注优先给标签，打字是备选**。记账的真实分布是少数名目反复出现
+ *    （午饭、通勤、咖啡），把高频的那几个抬到一键，比优化输入法有用得多；
+ *    而标签是从历史账目里算出来的，用户一次都不用维护。
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class LedgerViewModel(
@@ -108,12 +111,60 @@ class LedgerViewModel(
     private val _noteInput = MutableStateFlow("")
     val noteInput: StateFlow<String> = _noteInput.asStateFlow()
 
+    /**
+     * 常用备注标签，从历史账目里算出来的，用户不用维护。
+     *
+     * 没有记录时是空列表 —— 界面那边用一组兜底标签顶上，
+     * 否则第一次打开看到空一条，用户根本不知道这里有东西可用。
+     */
+    val noteChips: StateFlow<List<String>> = repository.observeNoteChips()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = emptyList()
+        )
+
+    /** 此刻选中的标签；null 表示没选 */
+    private val _selectedNote = MutableStateFlow<String?>(null)
+    val selectedNote: StateFlow<String?> = _selectedNote.asStateFlow()
+
+    /** 「自己写」是否展开。展开时以输入框为准，标签选中态让位 */
+    private val _customNoteOpen = MutableStateFlow(false)
+    val customNoteOpen: StateFlow<Boolean> = _customNoteOpen.asStateFlow()
+
     /** 金额看不懂时说一句，而不是静默吞掉这次输入 */
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
 
     fun switchMode(mode: LedgerMode) {
         _mode.value = mode
+    }
+
+    /**
+     * 点标签：选中 / 取消选中。
+     *
+     * 再点一下取消，是因为「点错了想反悔」的比重记一笔还常见 ——
+     * 何况选中态本身要能表达「这一笔不写备注」。
+     */
+    fun toggleNote(note: String) {
+        if (_selectedNote.value == note) {
+            _selectedNote.value = null
+            return
+        }
+        _selectedNote.value = note
+        // 换成标签就说明不打算自己写了，收起输入框免得两个来源打架
+        _customNoteOpen.value = false
+        _noteInput.value = ""
+    }
+
+    fun openCustomNote() {
+        _customNoteOpen.value = true
+        _selectedNote.value = null
+    }
+
+    fun closeCustomNote() {
+        _customNoteOpen.value = false
+        _noteInput.value = ""
     }
 
     fun shiftDate(days: Long) {
@@ -147,21 +198,36 @@ class LedgerViewModel(
         _noteInput.value = value
     }
 
-    fun addEntry() {
+    /**
+     * 记一笔。@return false 表示金额没看懂，这次输入被退回。
+     *
+     * 返回值只反映「校验是否通过」，不反映写库结果 ——
+     * 界面拿它决定要不要收键盘：写错了就把键盘留着，
+     * 让用户直接改，而不是收起来再点一次输入框。
+     */
+    fun addEntry(): Boolean {
         val cents = MoneyUtil.parseToCents(_amountInput.value)
         if (cents == null || cents <= 0L) {
             _error.value = "金额写清楚一点，比如 32 或 32.5"
-            return
+            return false
         }
-        val note = _noteInput.value
+        // 备注只有一个来源：自己写的内容，或选中的标签。
+        // 两者互斥（见 toggleNote / openCustomNote），所以这里不需要仲裁优先级。
+        val note = if (_customNoteOpen.value) _noteInput.value else (_selectedNote.value ?: "")
         val date = _viewDate.value
         viewModelScope.launch {
             if (repository.add(cents, note, date)) {
+                // 记完清场。刻意不保留上一次选中的标签 ——
+                // 保留虽然能连着记同一类，但下一次要记别的时，
+                // 得先发现「还选着旧的」再取消，多了一步且容易记错备注。
                 _amountInput.value = ""
                 _noteInput.value = ""
+                _selectedNote.value = null
+                _customNoteOpen.value = false
                 _error.value = null
             }
         }
+        return true
     }
 
     fun edit(expense: Expense, amountCents: Long, note: String) {

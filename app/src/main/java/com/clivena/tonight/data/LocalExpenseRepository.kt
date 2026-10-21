@@ -7,6 +7,7 @@ import com.clivena.tonight.domain.LedgerTotals
 import com.clivena.tonight.domain.MonthLedger
 import com.clivena.tonight.util.DateUtil
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import java.time.LocalDate
@@ -42,6 +43,13 @@ class LocalExpenseRepository(private val dao: ExpenseDao) : ExpenseRepository {
                 )
             }
     }
+
+    override fun observeNoteChips(limit: Int): Flow<List<String>> =
+        dao.observeFrequentNotes(limit)
+            .map { rows -> rows.map { it.note } }
+            // 标签只是提速的辅助，查询出问题不该让整屏记账挂掉 —— 退化成空列表，
+            // 界面自然回到「自己写备注」那条老路。
+            .catch { emit(emptyList()) }
 
     override suspend fun add(amountCents: Long, note: String, date: LocalDate): Boolean {
         if (amountCents <= 0L) return false

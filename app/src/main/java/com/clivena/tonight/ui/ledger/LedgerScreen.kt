@@ -23,10 +23,8 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -40,6 +38,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -63,8 +62,14 @@ import java.time.YearMonth
  * 分开而不是挤成一屏，因为这两件事的垂直空间需求是冲突的 ——
  * 写要的是输入框一直在手边，翻要的是尽量大的格子。
  *
- * 和其它两屏一样，这里也不引入卡片、阴影、圆角容器那一套装饰 ——
+ * 和其它两屏一样，这里也不引入卡片、阴影、圆角大容器那一套装饰 ——
  * 数字用字号和颜色分出主次就够了。
+ *
+ * v0.5 的两处结构性改动：
+ * 1. **备注从「打字」变成「点选」**。历史备注在底部排成可点的标签，
+ *    记账的主路径（点标签 → 输数字 → 记）全程不需要切换输入法。
+ * 2. **删除从常态行收进编辑态**。账目删除是不可撤销的，
+ *    常驻一个「×」在每行右边，误触的代价和收益完全不成比例。
  */
 @Composable
 fun LedgerScreen(
@@ -82,6 +87,9 @@ fun LedgerScreen(
         val monthLedger by viewModel.monthLedger.collectAsStateWithLifecycle()
         val amountInput by viewModel.amountInput.collectAsStateWithLifecycle()
         val noteInput by viewModel.noteInput.collectAsStateWithLifecycle()
+        val noteChips by viewModel.noteChips.collectAsStateWithLifecycle()
+        val selectedNote by viewModel.selectedNote.collectAsStateWithLifecycle()
+        val customNoteOpen by viewModel.customNoteOpen.collectAsStateWithLifecycle()
         val error by viewModel.error.collectAsStateWithLifecycle()
         val canGoForward by viewModel.canGoForward.collectAsStateWithLifecycle()
         val canGoNextMonth by viewModel.canGoNextMonth.collectAsStateWithLifecycle()
@@ -104,7 +112,7 @@ fun LedgerScreen(
 
                 TopTabs(active = Tab.LEDGER, onSelect = onSelectTab)
 
-                Spacer(Modifier.height(20.dp))
+                Spacer(Modifier.height(16.dp))
 
                 Column(Modifier.padding(horizontal = 24.dp)) {
                     Text(
@@ -113,7 +121,7 @@ fun LedgerScreen(
                         color = MaterialTheme.colorScheme.onBackground
                     )
 
-                    Spacer(Modifier.height(14.dp))
+                    Spacer(Modifier.height(16.dp))
 
                     ModeSwitch(mode = mode, onSelect = viewModel::switchMode)
                 }
@@ -124,20 +132,34 @@ fun LedgerScreen(
                         viewDate = viewDate,
                         expenses = expenses,
                         totals = totals,
-                        amountInput = amountInput,
-                        noteInput = noteInput,
-                        error = error,
+                        input = InputState(
+                            amount = amountInput,
+                            note = noteInput,
+                            chips = noteChips,
+                            selectedNote = selectedNote,
+                            customOpen = customNoteOpen,
+                            error = error
+                        ),
+                        edit = EditState(editingId, draftAmount, draftNote),
                         canGoForward = canGoForward,
-                        editingId = editingId,
-                        draftAmount = draftAmount,
-                        draftNote = draftNote,
-                        onDraftAmountChange = { draftAmount = it },
-                        onDraftNoteChange = { draftNote = it },
+                        onShiftDate = viewModel::shiftDate,
+                        onAmountChange = viewModel::onAmountChange,
+                        onCustomNoteChange = viewModel::onNoteChange,
+                        onToggleNote = viewModel::toggleNote,
+                        onCustomNote = {
+                            if (customNoteOpen) viewModel.closeCustomNote() else viewModel.openCustomNote()
+                        },
+                        onAdd = {
+                            // 校验没过就别收键盘 —— 写错了还要再点一次输入框，很烦
+                            if (viewModel.addEntry()) keyboard?.hide()
+                        },
                         onStartEdit = { expense ->
                             editingId = expense.id
                             draftAmount = MoneyUtil.toPlainInput(expense.amountCents)
                             draftNote = expense.note
                         },
+                        onDraftAmountChange = { draftAmount = it },
+                        onDraftNoteChange = { draftNote = it },
                         onCommitEdit = { expense ->
                             val cents = MoneyUtil.parseToCents(draftAmount)
                             if (cents != null && cents > 0L) {
@@ -147,19 +169,12 @@ fun LedgerScreen(
                             }
                         },
                         onCancelEdit = { editingId = null },
-                        onRemove = viewModel::remove,
-                        onShiftDate = viewModel::shiftDate,
-                        onAmountChange = viewModel::onAmountChange,
-                        onNoteChange = viewModel::onNoteChange,
-                        onAdd = {
-                            viewModel.addEntry()
-                            keyboard?.hide()
-                        }
+                        onRemove = viewModel::remove
                     )
                 } else {
                     BrowseBody(
                         today = today,
-                        anchorTotals = totals,
+                        totals = totals,
                         monthLabel = DateUtil.monthLabel(viewMonth),
                         monthTotalCents = monthLedger.totalCents,
                         monthDailyTotals = monthLedger.dailyTotals,
@@ -176,11 +191,29 @@ fun LedgerScreen(
     }
 }
 
+/** 「记一笔」的输入区状态。打包成两个小结构，免得函数签名堆二十几个参数 */
+private data class InputState(
+    val amount: String,
+    val note: String,
+    val chips: List<String>,
+    val selectedNote: String?,
+    val customOpen: Boolean,
+    val error: String?
+)
+
+/** 明细行的编辑态 */
+private data class EditState(
+    val editingId: Long?,
+    val amount: String,
+    val note: String
+)
+
 /**
- * 「记一笔」：大数字 + 当天明细 + 输入框。
+ * 「记一笔」：汇总 → 日期导航 → 当天明细 → 底部输入区。
  *
- * 汇总卡按老样子锚定真正的今天，不跟着明细翻页走 ——
- * 见 LedgerViewModel 类注释第 1 条。
+ * 汇总锚定真正的今天，不跟着明细翻页走 —— 见 LedgerViewModel 类注释第 1 条。
+ * 输入区固定在下半屏末端，键盘弹出时整条跟着上移（imePadding 在上一层），
+ * 所以无论有没有弹键盘，金额和「记」都停在离拇指最近的位置。
  */
 @Composable
 private fun ColumnScope.RecordBody(
@@ -188,177 +221,141 @@ private fun ColumnScope.RecordBody(
     viewDate: LocalDate,
     expenses: List<Expense>,
     totals: LedgerTotals,
-    amountInput: String,
-    noteInput: String,
-    error: String?,
+    input: InputState,
+    edit: EditState,
     canGoForward: Boolean,
-    editingId: Long?,
-    draftAmount: String,
-    draftNote: String,
-    onDraftAmountChange: (String) -> Unit,
-    onDraftNoteChange: (String) -> Unit,
-    onStartEdit: (Expense) -> Unit,
-    onCommitEdit: (Expense) -> Unit,
-    onCancelEdit: () -> Unit,
-    onRemove: (Long) -> Unit,
     onShiftDate: (Long) -> Unit,
     onAmountChange: (String) -> Unit,
-    onNoteChange: (String) -> Unit,
-    onAdd: () -> Unit
+    onCustomNoteChange: (String) -> Unit,
+    onToggleNote: (String) -> Unit,
+    onCustomNote: () -> Unit,
+    onAdd: () -> Unit,
+    onStartEdit: (Expense) -> Unit,
+    onDraftAmountChange: (String) -> Unit,
+    onDraftNoteChange: (String) -> Unit,
+    onCommitEdit: (Expense) -> Unit,
+    onCancelEdit: () -> Unit,
+    onRemove: (Long) -> Unit
 ) {
     Column(Modifier.padding(horizontal = 24.dp)) {
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(14.dp))
 
         Summary(totals)
 
-        Spacer(Modifier.height(18.dp))
+        Spacer(Modifier.height(16.dp))
 
         HairLine()
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(6.dp))
 
-        // 明细的日期导航。「←」可以一直往回走去看历史，
-        // 「→」到今天为止 —— 未来的账不存在。
+        // 日期导航。原来是「← 日期 →」再加一行「记在 X」——
+        // 那行永远在、永远说同一件事，等于每屏白送一行高度。
+        // 这里把它并进导航：箭头本身已经表达了「正在看哪天」。
         Row(verticalAlignment = Alignment.CenterVertically) {
             RowAction("←", enabled = true) { onShiftDate(-1) }
-            Spacer(Modifier.width(10.dp))
+            Spacer(Modifier.width(4.dp))
             Text(
-                text = DateUtil.labelFor(viewDate, today),
+                text = DateUtil.navLabel(viewDate, today),
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onBackground
             )
-            Spacer(Modifier.width(10.dp))
+            Spacer(Modifier.width(4.dp))
             RowAction("→", enabled = canGoForward) { onShiftDate(1) }
         }
     }
 
-    Spacer(Modifier.height(6.dp))
-
-    LazyColumn(
-        modifier = Modifier
+    Box(
+        Modifier
             .weight(1f)
-            .padding(horizontal = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp)
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp)
     ) {
         if (expenses.isEmpty()) {
-            item {
-                Text(
-                    text = if (viewDate == today) {
-                        "今天还没记。花了就记一笔。"
-                    } else {
-                        "这一天没有记录。"
-                    },
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-
-        items(expenses, key = { it.id }) { expense ->
-            LedgerRow(
-                expense = expense,
-                editing = editingId == expense.id,
-                draftAmount = draftAmount,
-                draftNote = draftNote,
-                onDraftAmountChange = onDraftAmountChange,
-                onDraftNoteChange = onDraftNoteChange,
-                onStartEdit = { onStartEdit(expense) },
-                onCommitEdit = { onCommitEdit(expense) },
-                onCancelEdit = onCancelEdit,
-                onDelete = {
-                    onCancelEdit()
-                    onRemove(expense.id)
-                }
-            )
-        }
-    }
-
-    Column(Modifier.padding(horizontal = 24.dp)) {
-        Spacer(Modifier.height(10.dp))
-
-        Text(
-            text = "记在 ${DateUtil.labelFor(viewDate, today)}",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-
-        Spacer(Modifier.height(6.dp))
-
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            OutlinedTextField(
-                value = amountInput,
-                onValueChange = onAmountChange,
-                modifier = Modifier.width(118.dp),
-                placeholder = {
-                    Text(
-                        text = "金额",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                },
-                textStyle = MaterialTheme.typography.bodyLarge,
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Decimal,
-                    imeAction = ImeAction.Next
-                )
-            )
-
-            Spacer(Modifier.width(8.dp))
-
-            OutlinedTextField(
-                value = noteInput,
-                onValueChange = onNoteChange,
-                modifier = Modifier.weight(1f),
-                placeholder = {
-                    Text(
-                        text = "备注（可不填）",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                },
-                textStyle = MaterialTheme.typography.bodyLarge,
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                keyboardActions = KeyboardActions(onDone = { onAdd() })
-            )
-        }
-
-        if (error != null) {
-            Spacer(Modifier.height(6.dp))
+            // 空态居中而不是贴左：贴左的一行字看起来像「列表加载到这里为止了」，
+            // 居中才像「这一块现在是空的」。
             Text(
-                text = error,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.error
+                text = "还没记。下面点个标签、输个数就行。",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .padding(bottom = 8.dp)
             )
-        }
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End
-        ) {
-            TextButton(onClick = onAdd, enabled = amountInput.isNotBlank()) {
-                Text("记一笔", style = MaterialTheme.typography.labelLarge)
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                items(expenses, key = { it.id }) { expense ->
+                    LedgerRow(
+                        expense = expense,
+                        editing = edit.editingId == expense.id,
+                        draftAmount = edit.amount,
+                        draftNote = edit.note,
+                        onDraftAmountChange = onDraftAmountChange,
+                        onDraftNoteChange = onDraftNoteChange,
+                        onStartEdit = { onStartEdit(expense) },
+                        onCommitEdit = { onCommitEdit(expense) },
+                        onCancelEdit = onCancelEdit,
+                        onDelete = {
+                            onCancelEdit()
+                            onRemove(expense.id)
+                        }
+                    )
+                }
             }
         }
     }
 
-    Spacer(Modifier.height(16.dp))
+    Spacer(Modifier.height(8.dp))
+
+    NoteChips(
+        chips = input.chips,
+        selected = input.selectedNote,
+        customOpen = input.customOpen,
+        onToggle = onToggleNote,
+        onCustom = onCustomNote
+    )
+
+    Spacer(Modifier.height(2.dp))
+
+    LedgerInputBar(
+        amount = input.amount,
+        onAmountChange = onAmountChange,
+        customNoteOpen = input.customOpen,
+        customNote = input.note,
+        onCustomNoteChange = onCustomNoteChange,
+        onSubmit = onAdd
+    )
+
+    input.error?.let { message ->
+        Text(
+            text = message,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.error,
+            modifier = Modifier.padding(horizontal = 24.dp)
+        )
+    }
+
+    Spacer(Modifier.height(12.dp))
 }
 
 /**
- * 「看花销」：月份导航 + 月历 + 本月的合计。
+ * 「看花销」：三列统计 → 月份导航 → 月历 → 本月合计。
  *
- * 顶部那行小字是**此刻**的今日 / 本周 / 本月，锚定真正的今天。
- * 它和下面的月历分属两个时间维度，所以刻意做成灰字 ——
- * 好和月历下面的「合计」（正在看的那个月）区分开：
- * 翻到 3 月时，如果上面那行也跟着变成 3 月，
+ * 顶部三个数字原来是挤在一行的小字：「今日 ¥32.00 · 本周 ¥210.00 · 本月 ¥1,204.00」，
+ * 一行放不下就截断，而它恰好是这个屏最想说的东西之一。
+ * 改成三列之后每个数字都有独立的位置和固定的上限，
+ * 「今日」仍用主色压住主次，不至于变成三个等权的仪表盘。
+ *
+ * 它们锚定的是**此刻**，和下面的月历（正在翻的那个月）是两个时间维度 ——
+ * 翻到 3 月时如果这一行也跟着变成 3 月，
  * 那「今天花了多少」就永远看不到了。
  */
 @Composable
 private fun ColumnScope.BrowseBody(
     today: LocalDate,
-    anchorTotals: LedgerTotals,
+    totals: LedgerTotals,
     monthLabel: String,
     monthTotalCents: Long,
     monthDailyTotals: Map<LocalDate, Long>,
@@ -375,39 +372,29 @@ private fun ColumnScope.BrowseBody(
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp)
     ) {
+        Spacer(Modifier.height(14.dp))
+
+        StatRow(totals)
+
         Spacer(Modifier.height(16.dp))
-
-        Text(
-            text = "今日 ${MoneyUtil.format(anchorTotals.todayCents)}" +
-                " · 本周 ${MoneyUtil.format(anchorTotals.weekCents)}" +
-                " · 本月 ${MoneyUtil.format(anchorTotals.monthCents)}",
-            style = MaterialTheme.typography.bodyMedium.copy(
-                fontSize = 13.sp,
-                lineHeight = 18.sp
-            ),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1
-        )
-
-        Spacer(Modifier.height(18.dp))
 
         HairLine()
 
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(8.dp))
 
         Row(verticalAlignment = Alignment.CenterVertically) {
             RowAction("←", enabled = true) { onShiftMonth(-1) }
-            Spacer(Modifier.width(10.dp))
+            Spacer(Modifier.width(4.dp))
             Text(
                 text = monthLabel,
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onBackground
             )
-            Spacer(Modifier.width(10.dp))
+            Spacer(Modifier.width(4.dp))
             RowAction("→", enabled = canGoNextMonth) { onShiftMonth(1) }
         }
 
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(14.dp))
 
         MonthGrid(
             month = viewMonth,
@@ -443,29 +430,82 @@ private fun ColumnScope.BrowseBody(
     }
 }
 
-/**
- * 「记一笔 / 看花销」的二级切换。
- *
- * 做成比顶部 TopTabs 小一号的同款（小字、更短的下划线），
- * 一眼能看出它是同一屏里的第二层，而不是第四个 Tab。
- */
+/** 今日 / 本周 / 本月，三列等宽。今日用主色，其余用正文色 */
 @Composable
-private fun ModeSwitch(mode: LedgerMode, onSelect: (LedgerMode) -> Unit) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        ModeItem("记一笔", mode == LedgerMode.RECORD) { onSelect(LedgerMode.RECORD) }
-        Spacer(Modifier.width(18.dp))
-        ModeItem("看花销", mode == LedgerMode.BROWSE) { onSelect(LedgerMode.BROWSE) }
+private fun StatRow(totals: LedgerTotals) {
+    Row(Modifier.fillMaxWidth()) {
+        StatCell("今日", totals.todayCents, accent = true, modifier = Modifier.weight(1f))
+        StatCell("本周", totals.weekCents, accent = false, modifier = Modifier.weight(1f))
+        StatCell("本月", totals.monthCents, accent = false, modifier = Modifier.weight(1f))
     }
 }
 
 @Composable
-private fun ModeItem(label: String, selected: Boolean, onClick: () -> Unit) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
+private fun StatCell(
+    label: String,
+    cents: Long,
+    accent: Boolean,
+    modifier: Modifier
+) {
+    Column(modifier) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium.copy(
+                fontSize = 12.sp,
+                lineHeight = 16.sp
+            ),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1
+        )
+        Spacer(Modifier.height(3.dp))
+        Text(
+            text = MoneyUtil.format(cents),
+            style = MaterialTheme.typography.bodyLarge.copy(
+                fontSize = 17.sp,
+                lineHeight = 24.sp
+            ),
+            color = if (accent) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.onBackground
+            },
+            maxLines = 1
+        )
+    }
+}
+
+/**
+ * 「记一笔 / 看花销」的二级切换，做成分段控件。
+ *
+ * 上一版是两段带下划线的文字，和顶部「今天 / 规划 / 记账」长得几乎一样，
+ * 结果两个层级糊在一起 —— 用户会以为「记一笔」是第四个 Tab。
+ * 换成一块两格的实心底板后，它一眼就是「同一屏里的两种视图」。
+ */
+@Composable
+private fun ModeSwitch(mode: LedgerMode, onSelect: (LedgerMode) -> Unit) {
+    Row(
         modifier = Modifier
-            .clip(RoundedCornerShape(6.dp))
+            .clip(RoundedCornerShape(9.dp))
+            .background(MaterialTheme.colorScheme.outline)
+            .padding(2.dp),
+        horizontalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        Segment("记一笔", mode == LedgerMode.RECORD) { onSelect(LedgerMode.RECORD) }
+        Segment("看花销", mode == LedgerMode.BROWSE) { onSelect(LedgerMode.BROWSE) }
+    }
+}
+
+@Composable
+private fun Segment(label: String, selected: Boolean, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(7.dp))
+            .background(
+                if (selected) MaterialTheme.colorScheme.surface else Color.Transparent
+            )
             .clickable(onClick = onClick)
-            .padding(horizontal = 4.dp, vertical = 4.dp)
+            .padding(horizontal = 20.dp, vertical = 6.dp),
+        contentAlignment = Alignment.Center
     ) {
         Text(
             text = label,
@@ -475,15 +515,6 @@ private fun ModeItem(label: String, selected: Boolean, onClick: () -> Unit) {
             } else {
                 MaterialTheme.colorScheme.onSurfaceVariant
             }
-        )
-        Spacer(Modifier.height(4.dp))
-        Box(
-            Modifier
-                .height(1.5.dp)
-                .width(12.dp)
-                .background(
-                    if (selected) MaterialTheme.colorScheme.primary else Color.Transparent
-                )
         )
     }
 }
@@ -499,7 +530,7 @@ private fun HairLine() {
 }
 
 /**
- * 汇总卡。
+ * 汇总。
  *
  * 「今日」是主角，字号和颜色都给它；周和月是陪衬，一行小字并列。
  * 刻意不做成三个等大的数字 —— 那样等于没有主次，
@@ -546,9 +577,12 @@ private fun Summary(totals: LedgerTotals) {
  * 一行账：备注在左、金额在右，像真的账本。
  *
  * 两个态：
- * - 常态：整行可点（进入编辑），右侧「×」删除
- * - 编辑态：金额和备注就地变输入框，右侧「✓」提交、「×」放弃这次修改
- *   「×」在两种态下都表示「放弃当前这个动作」，语义是一致的
+ * - 常态：整行可点（进入编辑）。**没有删除** ——
+ *   账目删除不可撤销，常驻的「×」紧挨着手指的落点，误触一次就是永久损失。
+ *   为了省一次点击而把「误删一笔账」的概率放在每行每屏，不划算。
+ * - 编辑态：金额和备注就地变输入框，右侧「✓」保存、「删」删除（错误色）、「×」取消。
+ *   删除挪进来之后，它前面多了一道「先点开这一行」的门槛，
+ *   而真正想删的时候也就多一次点击。
  */
 @Composable
 private fun LedgerRow(
@@ -583,7 +617,7 @@ private fun LedgerRow(
                     imeAction = ImeAction.Next
                 ),
                 modifier = Modifier
-                    .width(72.dp)
+                    .width(56.dp)
                     .padding(vertical = 8.dp)
             )
 
@@ -604,9 +638,15 @@ private fun LedgerRow(
                     .padding(vertical = 8.dp)
             )
 
-            Spacer(Modifier.width(6.dp))
+            Spacer(Modifier.width(4.dp))
 
             RowAction("✓", enabled = true, onClick = onCommitEdit)
+            RowAction(
+                label = "删",
+                enabled = true,
+                color = MaterialTheme.colorScheme.error,
+                onClick = onDelete
+            )
             RowAction("×", enabled = true, onClick = onCancelEdit)
         }
     } else {
@@ -619,13 +659,23 @@ private fun LedgerRow(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = expense.note,
+                // 没写备注的账不是错账，只是没写。用一条淡横线占位，
+                // 比留白好 —— 留白会让整行看起来只有右边半截。
+                text = expense.note.ifBlank { "—" },
                 style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onBackground,
+                color = if (expense.note.isBlank()) {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                } else {
+                    MaterialTheme.colorScheme.onBackground
+                },
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier
                     .weight(1f)
-                    .padding(vertical = 8.dp)
+                    .padding(vertical = 9.dp)
             )
+
+            Spacer(Modifier.width(12.dp))
 
             Text(
                 text = MoneyUtil.format(expense.amountCents),
@@ -633,10 +683,6 @@ private fun LedgerRow(
                 color = MaterialTheme.colorScheme.onBackground,
                 maxLines = 1
             )
-
-            Spacer(Modifier.width(6.dp))
-
-            RowAction("×", enabled = true, onClick = onDelete)
         }
     }
 }

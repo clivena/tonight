@@ -42,6 +42,22 @@ object DateUtil {
     fun fullLabel(date: LocalDate): String = date.format(FULL_DATE)
 
     /**
+     * 明细导航用：今天 · 10/21、昨天 · 10/20、10/18。
+     *
+     * 不用 [labelFor] 的「10月18日 星期二」—— 那一行左右各有一个箭头，
+     * 全称会把箭头挤到屏幕边缘。况且记账时「星期几」没有决策价值，
+     * 用户只关心是哪一天。
+     */
+    fun navLabel(date: LocalDate, today: LocalDate = LocalDate.now()): String {
+        val monthDay = "${date.monthValue}/${date.dayOfMonth}"
+        return when (date) {
+            today -> "今天 · $monthDay"
+            today.minusDays(1) -> "昨天 · $monthDay"
+            else -> monthDay
+        }
+    }
+
+    /**
      * 这一周，**周一为一周之始**。
      *
      * 不用「周日开始」：发工资、还信用卡、看账单的周期都是周一，
