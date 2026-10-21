@@ -3,6 +3,7 @@ package com.clivena.tonight.ui.plan
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -21,7 +22,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -47,15 +47,18 @@ import com.clivena.tonight.Tab
 import com.clivena.tonight.domain.Task
 import com.clivena.tonight.ui.components.RowAction
 import com.clivena.tonight.ui.components.TopTabs
-import com.clivena.tonight.ui.theme.TonightTheme
 import com.clivena.tonight.util.DateUtil
 import java.time.LocalDate
 
 /**
- * 「规划」屏 —— 始终深色。
+ * 「规划」屏 —— 深档。
  *
  * 深色在这里不是审美偏好，是功能：这一屏主要在睡前用。
  * 所以不给红点、不给角标、不给进度条 —— 睡前不该有任何东西催你。
+ *
+ * v0.6 起「深」只表示用色板的深档，不再是写死的无彩深灰：
+ * 换主题色时，这一屏会跟着变成同色系的暗色 —— 四个屏看起来是一套东西，
+ * 但睡前那一面仍然是暗的。
  *
  * 但「安静」不等于「不能动」：清单每一条都可以改文字、挪位置、删掉。
  */
@@ -63,142 +66,142 @@ import java.time.LocalDate
 fun PlanScreen(
     viewModel: PlanViewModel,
     onSelectTab: (Tab) -> Unit,
+    onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    TonightTheme {
-        val tasks by viewModel.tasks.collectAsStateWithLifecycle()
-        val input by viewModel.input.collectAsStateWithLifecycle()
-        val planDate by viewModel.planDate.collectAsStateWithLifecycle()
-        val today = remember { LocalDate.now() }
-        val keyboard = LocalSoftwareKeyboardController.current
+    val tasks by viewModel.tasks.collectAsStateWithLifecycle()
+    val input by viewModel.input.collectAsStateWithLifecycle()
+    val planDate by viewModel.planDate.collectAsStateWithLifecycle()
+    val today = remember { LocalDate.now() }
+    val keyboard = LocalSoftwareKeyboardController.current
 
-        // 哪一条正在被编辑，以及编辑中的草稿
-        var editingId by remember { mutableStateOf<Long?>(null) }
-        var draft by remember { mutableStateOf("") }
+    // 哪一条正在被编辑，以及编辑中的草稿
+    var editingId by remember { mutableStateOf<Long?>(null) }
+    var draft by remember { mutableStateOf("") }
 
-        Surface(
-            modifier = modifier.fillMaxSize(),
-            color = MaterialTheme.colorScheme.background
+    Box(modifier.fillMaxSize()) {
+        Column(
+            Modifier
+                .fillMaxSize()
+                .imePadding()
         ) {
-            Column(
-                Modifier
-                    .fillMaxSize()
-                    .imePadding()
-            ) {
-                Spacer(Modifier.height(48.dp))
+            Spacer(Modifier.height(48.dp))
 
-                TopTabs(active = Tab.PLAN, onSelect = onSelectTab)
+            TopTabs(
+                active = Tab.PLAN,
+                onSelect = onSelectTab,
+                onSettings = onOpenSettings
+            )
 
-                Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(24.dp))
 
-                Column(Modifier.padding(horizontal = 24.dp)) {
-                    Text(
-                        text = DateUtil.labelFor(planDate, today),
-                        style = MaterialTheme.typography.headlineLarge,
-                        color = MaterialTheme.colorScheme.onBackground
-                    )
-                    Spacer(Modifier.height(10.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        DateChip("今天", planDate == today) { viewModel.selectDate(today) }
-                        Spacer(Modifier.width(8.dp))
-                        DateChip("明天", planDate == today.plusDays(1)) {
-                            viewModel.selectDate(today.plusDays(1))
-                        }
+            Column(Modifier.padding(horizontal = 24.dp)) {
+                Text(
+                    text = DateUtil.labelFor(planDate, today),
+                    style = MaterialTheme.typography.headlineLarge,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+                Spacer(Modifier.height(10.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    DateChip("今天", planDate == today) { viewModel.selectDate(today) }
+                    Spacer(Modifier.width(8.dp))
+                    DateChip("明天", planDate == today.plusDays(1)) {
+                        viewModel.selectDate(today.plusDays(1))
                     }
                 }
-
-                Spacer(Modifier.height(24.dp))
-
-                LazyColumn(
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(horizontal = 24.dp),
-                    verticalArrangement = Arrangement.spacedBy(2.dp)
-                ) {
-                    if (tasks.isEmpty()) {
-                        item {
-                            Text(
-                                text = "还没有。想到什么写什么。\n第二天打开「今天」，照着做就行。",
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-
-                    itemsIndexed(
-                        items = tasks,
-                        key = { _, task -> task.id }
-                    ) { index, task ->
-                        PlanRow(
-                            task = task,
-                            editing = editingId == task.id,
-                            draft = draft,
-                            canMoveUp = index > 0,
-                            canMoveDown = index < tasks.lastIndex,
-                            onDraftChange = { draft = it },
-                            onStartEdit = {
-                                editingId = task.id
-                                draft = task.content
-                            },
-                            onCommitEdit = {
-                                viewModel.rename(task.id, draft)
-                                editingId = null
-                                keyboard?.hide()
-                            },
-                            onToggle = { viewModel.toggle(task) },
-                            onMoveUp = { viewModel.moveUp(task.id) },
-                            onMoveDown = { viewModel.moveDown(task.id) },
-                            onDelete = {
-                                if (editingId == task.id) editingId = null
-                                viewModel.remove(task.id)
-                            }
-                        )
-                    }
-                }
-
-                Column(Modifier.padding(horizontal = 24.dp)) {
-                    Spacer(Modifier.height(12.dp))
-
-                    OutlinedTextField(
-                        value = input,
-                        onValueChange = viewModel::onInputChange,
-                        modifier = Modifier.fillMaxWidth(),
-                        placeholder = {
-                            Text(
-                                text = "比如：把周报写完",
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        },
-                        textStyle = MaterialTheme.typography.bodyLarge,
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                        keyboardActions = KeyboardActions(
-                            onDone = {
-                                viewModel.addTask()
-                                keyboard?.hide()
-                            }
-                        )
-                    )
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End
-                    ) {
-                        TextButton(
-                            onClick = {
-                                viewModel.addTask()
-                                keyboard?.hide()
-                            },
-                            enabled = input.isNotBlank()
-                        ) {
-                            Text("加进去", style = MaterialTheme.typography.labelLarge)
-                        }
-                    }
-                }
-
-                Spacer(Modifier.height(20.dp))
             }
+
+            Spacer(Modifier.height(24.dp))
+
+            LazyColumn(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                if (tasks.isEmpty()) {
+                    item {
+                        Text(
+                            text = "还没有。想到什么写什么。\n第二天打开「今天」，照着做就行。",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                itemsIndexed(
+                    items = tasks,
+                    key = { _, task -> task.id }
+                ) { index, task ->
+                    PlanRow(
+                        task = task,
+                        editing = editingId == task.id,
+                        draft = draft,
+                        canMoveUp = index > 0,
+                        canMoveDown = index < tasks.lastIndex,
+                        onDraftChange = { draft = it },
+                        onStartEdit = {
+                            editingId = task.id
+                            draft = task.content
+                        },
+                        onCommitEdit = {
+                            viewModel.rename(task.id, draft)
+                            editingId = null
+                            keyboard?.hide()
+                        },
+                        onToggle = { viewModel.toggle(task) },
+                        onMoveUp = { viewModel.moveUp(task.id) },
+                        onMoveDown = { viewModel.moveDown(task.id) },
+                        onDelete = {
+                            if (editingId == task.id) editingId = null
+                            viewModel.remove(task.id)
+                        }
+                    )
+                }
+            }
+
+            Column(Modifier.padding(horizontal = 24.dp)) {
+                Spacer(Modifier.height(12.dp))
+
+                OutlinedTextField(
+                    value = input,
+                    onValueChange = viewModel::onInputChange,
+                    modifier = Modifier.fillMaxWidth(),
+                    placeholder = {
+                        Text(
+                            text = "比如：把周报写完",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    },
+                    textStyle = MaterialTheme.typography.bodyLarge,
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(
+                        onDone = {
+                            viewModel.addTask()
+                            keyboard?.hide()
+                        }
+                    )
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(
+                        onClick = {
+                            viewModel.addTask()
+                            keyboard?.hide()
+                        },
+                        enabled = input.isNotBlank()
+                    ) {
+                        Text("加进去", style = MaterialTheme.typography.labelLarge)
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(20.dp))
         }
     }
 }

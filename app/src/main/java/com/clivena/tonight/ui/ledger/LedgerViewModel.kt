@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.clivena.tonight.data.ExpenseRepository
+import com.clivena.tonight.data.SettingsRepository
 import com.clivena.tonight.domain.Expense
 import com.clivena.tonight.domain.LedgerTotals
 import com.clivena.tonight.domain.MonthLedger
@@ -46,6 +47,7 @@ enum class LedgerMode { RECORD, BROWSE }
 @OptIn(ExperimentalCoroutinesApi::class)
 class LedgerViewModel(
     private val repository: ExpenseRepository,
+    private val settings: SettingsRepository,
     private val today: LocalDate = LocalDate.now()
 ) : ViewModel() {
 
@@ -112,17 +114,15 @@ class LedgerViewModel(
     val noteInput: StateFlow<String> = _noteInput.asStateFlow()
 
     /**
-     * 常用备注标签，从历史账目里算出来的，用户不用维护。
+     * 常用标签。**用户自己的**，不是从账目里统计出来的。
      *
-     * 没有记录时是空列表 —— 界面那边用一组兜底标签顶上，
-     * 否则第一次打开看到空一条，用户根本不知道这里有东西可用。
+     * v0.5 的做法是按频率从历史备注里算前 8 个，v0.6 改成固定内置 + 用户增删。
+     * 方向上的区别是：前者是算法猜你想要什么，后者是你自己说了算。
+     * 记账这件事上，后者更可靠 —— 人的消费名目是稳定的，不需要算法去发现。
+     *
+     * 存在 SharedPreferences 里（见 SettingsRepository），不建表、不进迁移。
      */
-    val noteChips: StateFlow<List<String>> = repository.observeNoteChips()
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5_000),
-            initialValue = emptyList()
-        )
+    val noteChips: StateFlow<List<String>> = settings.tags
 
     /** 此刻选中的标签；null 表示没选 */
     private val _selectedNote = MutableStateFlow<String?>(null)
@@ -166,6 +166,32 @@ class LedgerViewModel(
         _customNoteOpen.value = false
         _noteInput.value = ""
     }
+
+    /**
+     * 把「自己写」里的内容存成标签。
+     *
+     * 成功之后顺手把它选中、收起输入框 —— 用户按下这个按钮的意图就是
+     * 「以后我要常用它」，那它立刻变成一颗可点的标签比留在输入框里更合意图。
+     *
+     * 失败（空的 / 太长的 / 已经有的）什么都不做，也不提示：
+     * 这几种情况要么是用户误触，要么本来就没变化。
+     */
+    fun saveCurrentNoteAsTag() {
+        val text = _noteInput.value.trim()
+        if (settings.addTag(text)) {
+            _selectedNote.value = text
+            _customNoteOpen.value = false
+            _noteInput.value = ""
+        }
+    }
+
+    fun removeTag(tag: String) {
+        settings.removeTag(tag)
+        if (_selectedNote.value == tag) _selectedNote.value = null
+    }
+
+    /** 管理面板里直接加标签。@return false 表示没加成（空 / 太长 / 重复 / 满了） */
+    fun addTag(tag: String): Boolean = settings.addTag(tag)
 
     fun shiftDate(days: Long) {
         val target = _viewDate.value.plusDays(days)
@@ -239,11 +265,14 @@ class LedgerViewModel(
     }
 
     companion object {
-        fun factory(expenseRepository: ExpenseRepository): ViewModelProvider.Factory =
+        fun factory(
+            expenseRepository: ExpenseRepository,
+            settings: SettingsRepository
+        ): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
                 override fun <T : ViewModel> create(modelClass: Class<T>): T =
-                    LedgerViewModel(expenseRepository) as T
+                    LedgerViewModel(expenseRepository, settings) as T
             }
     }
 }

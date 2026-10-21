@@ -23,7 +23,6 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -47,146 +46,157 @@ import com.clivena.tonight.domain.Expense
 import com.clivena.tonight.domain.LedgerTotals
 import com.clivena.tonight.ui.components.RowAction
 import com.clivena.tonight.ui.components.TopTabs
-import com.clivena.tonight.ui.theme.TomorrowTheme
 import com.clivena.tonight.util.DateUtil
 import com.clivena.tonight.util.MoneyUtil
 import java.time.LocalDate
 import java.time.YearMonth
 
 /**
- * 「记账」屏 —— 始终浅色，和「今天」同族。
+ * 「记账」屏 —— 浅色档。
  *
- * 三栏里只有「规划」是深色：记账发生在花钱的当下，是白天的事。
+ * 主题由顶层统一提供（v0.6 起），本屏不再自己包一层 Theme：
+ * 换色板时只需要动 [com.clivena.tonight.ui.theme.TonightTheme]，四屏一起变。
  *
  * 屏内分两个面：「记一笔」用来写，「看花销」用来翻。
  * 分开而不是挤成一屏，因为这两件事的垂直空间需求是冲突的 ——
  * 写要的是输入框一直在手边，翻要的是尽量大的格子。
  *
- * 和其它两屏一样，这里也不引入卡片、阴影、圆角大容器那一套装饰 ——
+ * 和其它屏一样，这里也不引入卡片、阴影、圆角大容器那一套装饰 ——
  * 数字用字号和颜色分出主次就够了。
  *
- * v0.5 的两处结构性改动：
- * 1. **备注从「打字」变成「点选」**。历史备注在底部排成可点的标签，
- *    记账的主路径（点标签 → 输数字 → 记）全程不需要切换输入法。
- * 2. **删除从常态行收进编辑态**。账目删除是不可撤销的，
- *    常驻一个「×」在每行右边，误触的代价和收益完全不成比例。
+ * v0.6 的两处改动：
+ * 1. **标签变成用户自己的**：内置八个 + 自己加的，长按可进管理。
+ *    不再是 v0.5 那种从历史备注里统计出来的。
+ * 2. **背景改由主题层铺**，本屏只画内容，否则自定义背景图会被盖住。
  */
 @Composable
 fun LedgerScreen(
     viewModel: LedgerViewModel,
     onSelectTab: (Tab) -> Unit,
+    onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    TomorrowTheme {
-        val today = remember { LocalDate.now() }
-        val mode by viewModel.mode.collectAsStateWithLifecycle()
-        val viewDate by viewModel.viewDate.collectAsStateWithLifecycle()
-        val viewMonth by viewModel.viewMonth.collectAsStateWithLifecycle()
-        val expenses by viewModel.expenses.collectAsStateWithLifecycle()
-        val totals by viewModel.totals.collectAsStateWithLifecycle()
-        val monthLedger by viewModel.monthLedger.collectAsStateWithLifecycle()
-        val amountInput by viewModel.amountInput.collectAsStateWithLifecycle()
-        val noteInput by viewModel.noteInput.collectAsStateWithLifecycle()
-        val noteChips by viewModel.noteChips.collectAsStateWithLifecycle()
-        val selectedNote by viewModel.selectedNote.collectAsStateWithLifecycle()
-        val customNoteOpen by viewModel.customNoteOpen.collectAsStateWithLifecycle()
-        val error by viewModel.error.collectAsStateWithLifecycle()
-        val canGoForward by viewModel.canGoForward.collectAsStateWithLifecycle()
-        val canGoNextMonth by viewModel.canGoNextMonth.collectAsStateWithLifecycle()
-        val keyboard = LocalSoftwareKeyboardController.current
+    val today = remember { LocalDate.now() }
+    val mode by viewModel.mode.collectAsStateWithLifecycle()
+    val viewDate by viewModel.viewDate.collectAsStateWithLifecycle()
+    val viewMonth by viewModel.viewMonth.collectAsStateWithLifecycle()
+    val expenses by viewModel.expenses.collectAsStateWithLifecycle()
+    val totals by viewModel.totals.collectAsStateWithLifecycle()
+    val monthLedger by viewModel.monthLedger.collectAsStateWithLifecycle()
+    val amountInput by viewModel.amountInput.collectAsStateWithLifecycle()
+    val noteInput by viewModel.noteInput.collectAsStateWithLifecycle()
+    val noteChips by viewModel.noteChips.collectAsStateWithLifecycle()
+    val selectedNote by viewModel.selectedNote.collectAsStateWithLifecycle()
+    val customNoteOpen by viewModel.customNoteOpen.collectAsStateWithLifecycle()
+    val error by viewModel.error.collectAsStateWithLifecycle()
+    val canGoForward by viewModel.canGoForward.collectAsStateWithLifecycle()
+    val canGoNextMonth by viewModel.canGoNextMonth.collectAsStateWithLifecycle()
+    val keyboard = LocalSoftwareKeyboardController.current
 
-        var editingId by remember { mutableStateOf<Long?>(null) }
-        var draftAmount by remember { mutableStateOf("") }
-        var draftNote by remember { mutableStateOf("") }
+    var editingId by remember { mutableStateOf<Long?>(null) }
+    var draftAmount by remember { mutableStateOf("") }
+    var draftNote by remember { mutableStateOf("") }
+    var tagManagerOpen by remember { mutableStateOf(false) }
 
-        Surface(
-            modifier = modifier.fillMaxSize(),
-            color = MaterialTheme.colorScheme.background
+    Box(modifier.fillMaxSize()) {
+        Column(
+            Modifier
+                .fillMaxSize()
+                .imePadding()
         ) {
-            Column(
-                Modifier
-                    .fillMaxSize()
-                    .imePadding()
-            ) {
-                Spacer(Modifier.height(48.dp))
+            Spacer(Modifier.height(48.dp))
 
-                TopTabs(active = Tab.LEDGER, onSelect = onSelectTab)
+            TopTabs(
+                active = Tab.LEDGER,
+                onSelect = onSelectTab,
+                onSettings = onOpenSettings
+            )
+
+            Spacer(Modifier.height(16.dp))
+
+            Column(Modifier.padding(horizontal = 24.dp)) {
+                Text(
+                    text = "记账",
+                    style = MaterialTheme.typography.headlineLarge,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
 
                 Spacer(Modifier.height(16.dp))
 
-                Column(Modifier.padding(horizontal = 24.dp)) {
-                    Text(
-                        text = "记账",
-                        style = MaterialTheme.typography.headlineLarge,
-                        color = MaterialTheme.colorScheme.onBackground
-                    )
-
-                    Spacer(Modifier.height(16.dp))
-
-                    ModeSwitch(mode = mode, onSelect = viewModel::switchMode)
-                }
-
-                if (mode == LedgerMode.RECORD) {
-                    RecordBody(
-                        today = today,
-                        viewDate = viewDate,
-                        expenses = expenses,
-                        totals = totals,
-                        input = InputState(
-                            amount = amountInput,
-                            note = noteInput,
-                            chips = noteChips,
-                            selectedNote = selectedNote,
-                            customOpen = customNoteOpen,
-                            error = error
-                        ),
-                        edit = EditState(editingId, draftAmount, draftNote),
-                        canGoForward = canGoForward,
-                        onShiftDate = viewModel::shiftDate,
-                        onAmountChange = viewModel::onAmountChange,
-                        onCustomNoteChange = viewModel::onNoteChange,
-                        onToggleNote = viewModel::toggleNote,
-                        onCustomNote = {
-                            if (customNoteOpen) viewModel.closeCustomNote() else viewModel.openCustomNote()
-                        },
-                        onAdd = {
-                            // 校验没过就别收键盘 —— 写错了还要再点一次输入框，很烦
-                            if (viewModel.addEntry()) keyboard?.hide()
-                        },
-                        onStartEdit = { expense ->
-                            editingId = expense.id
-                            draftAmount = MoneyUtil.toPlainInput(expense.amountCents)
-                            draftNote = expense.note
-                        },
-                        onDraftAmountChange = { draftAmount = it },
-                        onDraftNoteChange = { draftNote = it },
-                        onCommitEdit = { expense ->
-                            val cents = MoneyUtil.parseToCents(draftAmount)
-                            if (cents != null && cents > 0L) {
-                                viewModel.edit(expense, cents, draftNote)
-                                editingId = null
-                                keyboard?.hide()
-                            }
-                        },
-                        onCancelEdit = { editingId = null },
-                        onRemove = viewModel::remove
-                    )
-                } else {
-                    BrowseBody(
-                        today = today,
-                        totals = totals,
-                        monthLabel = DateUtil.monthLabel(viewMonth),
-                        monthTotalCents = monthLedger.totalCents,
-                        monthDailyTotals = monthLedger.dailyTotals,
-                        peakDayCents = monthLedger.peakDayCents,
-                        activeDays = monthLedger.activeDays,
-                        viewMonth = viewMonth,
-                        canGoNextMonth = canGoNextMonth,
-                        onShiftMonth = viewModel::shiftMonth,
-                        onPickDate = viewModel::openDate
-                    )
-                }
+                ModeSwitch(mode = mode, onSelect = viewModel::switchMode)
             }
+
+            if (mode == LedgerMode.RECORD) {
+                RecordBody(
+                    today = today,
+                    viewDate = viewDate,
+                    expenses = expenses,
+                    totals = totals,
+                    input = InputState(
+                        amount = amountInput,
+                        note = noteInput,
+                        chips = noteChips,
+                        selectedNote = selectedNote,
+                        customOpen = customNoteOpen,
+                        error = error
+                    ),
+                    edit = EditState(editingId, draftAmount, draftNote),
+                    canGoForward = canGoForward,
+                    onShiftDate = viewModel::shiftDate,
+                    onAmountChange = viewModel::onAmountChange,
+                    onCustomNoteChange = viewModel::onNoteChange,
+                    onToggleNote = viewModel::toggleNote,
+                    onCustomNote = {
+                        if (customNoteOpen) viewModel.closeCustomNote() else viewModel.openCustomNote()
+                    },
+                    onManageTags = { tagManagerOpen = true },
+                    onSaveAsTag = viewModel::saveCurrentNoteAsTag,
+                    onAdd = {
+                        // 校验没过就别收键盘 —— 写错了还要再点一次输入框，很烦
+                        if (viewModel.addEntry()) keyboard?.hide()
+                    },
+                    onStartEdit = { expense ->
+                        editingId = expense.id
+                        draftAmount = MoneyUtil.toPlainInput(expense.amountCents)
+                        draftNote = expense.note
+                    },
+                    onDraftAmountChange = { draftAmount = it },
+                    onDraftNoteChange = { draftNote = it },
+                    onCommitEdit = { expense ->
+                        val cents = MoneyUtil.parseToCents(draftAmount)
+                        if (cents != null && cents > 0L) {
+                            viewModel.edit(expense, cents, draftNote)
+                            editingId = null
+                            keyboard?.hide()
+                        }
+                    },
+                    onCancelEdit = { editingId = null },
+                    onRemove = viewModel::remove
+                )
+            } else {
+                BrowseBody(
+                    today = today,
+                    totals = totals,
+                    monthLabel = DateUtil.monthLabel(viewMonth),
+                    monthTotalCents = monthLedger.totalCents,
+                    monthDailyTotals = monthLedger.dailyTotals,
+                    peakDayCents = monthLedger.peakDayCents,
+                    activeDays = monthLedger.activeDays,
+                    viewMonth = viewMonth,
+                    canGoNextMonth = canGoNextMonth,
+                    onShiftMonth = viewModel::shiftMonth,
+                    onPickDate = viewModel::openDate
+                )
+            }
+        }
+
+        if (tagManagerOpen) {
+            TagManagerDialog(
+                tags = noteChips,
+                onDismiss = { tagManagerOpen = false },
+                onAdd = viewModel::addTag,
+                onRemove = viewModel::removeTag
+            )
         }
     }
 }
@@ -229,6 +239,8 @@ private fun ColumnScope.RecordBody(
     onCustomNoteChange: (String) -> Unit,
     onToggleNote: (String) -> Unit,
     onCustomNote: () -> Unit,
+    onManageTags: () -> Unit,
+    onSaveAsTag: () -> Unit,
     onAdd: () -> Unit,
     onStartEdit: (Expense) -> Unit,
     onDraftAmountChange: (String) -> Unit,
@@ -250,7 +262,6 @@ private fun ColumnScope.RecordBody(
 
         // 日期导航。原来是「← 日期 →」再加一行「记在 X」——
         // 那行永远在、永远说同一件事，等于每屏白送一行高度。
-        // 这里把它并进导航：箭头本身已经表达了「正在看哪天」。
         Row(verticalAlignment = Alignment.CenterVertically) {
             RowAction("←", enabled = true) { onShiftDate(-1) }
             Spacer(Modifier.width(4.dp))
@@ -314,7 +325,8 @@ private fun ColumnScope.RecordBody(
         selected = input.selectedNote,
         customOpen = input.customOpen,
         onToggle = onToggleNote,
-        onCustom = onCustomNote
+        onCustom = onCustomNote,
+        onManage = onManageTags
     )
 
     Spacer(Modifier.height(2.dp))
@@ -325,6 +337,7 @@ private fun ColumnScope.RecordBody(
         customNoteOpen = input.customOpen,
         customNote = input.note,
         onCustomNoteChange = onCustomNoteChange,
+        onSaveAsTag = onSaveAsTag,
         onSubmit = onAdd
     )
 
@@ -343,12 +356,7 @@ private fun ColumnScope.RecordBody(
 /**
  * 「看花销」：三列统计 → 月份导航 → 月历 → 本月合计。
  *
- * 顶部三个数字原来是挤在一行的小字：「今日 ¥32.00 · 本周 ¥210.00 · 本月 ¥1,204.00」，
- * 一行放不下就截断，而它恰好是这个屏最想说的东西之一。
- * 改成三列之后每个数字都有独立的位置和固定的上限，
- * 「今日」仍用主色压住主次，不至于变成三个等权的仪表盘。
- *
- * 它们锚定的是**此刻**，和下面的月历（正在翻的那个月）是两个时间维度 ——
+ * 顶部三个数字锚定的是**此刻**，和下面的月历（正在翻的那个月）是两个时间维度 ——
  * 翻到 3 月时如果这一行也跟着变成 3 月，
  * 那「今天花了多少」就永远看不到了。
  */
@@ -477,9 +485,8 @@ private fun StatCell(
 /**
  * 「记一笔 / 看花销」的二级切换，做成分段控件。
  *
- * 上一版是两段带下划线的文字，和顶部「今天 / 规划 / 记账」长得几乎一样，
- * 结果两个层级糊在一起 —— 用户会以为「记一笔」是第四个 Tab。
- * 换成一块两格的实心底板后，它一眼就是「同一屏里的两种视图」。
+ * 段控的底板用 outline 色、选中项用 surface 色。有背景图时这两个色
+ * 都是不透明的，所以控件在图上依然读得清 —— 这是选它们而不是半透明的原因。
  */
 @Composable
 private fun ModeSwitch(mode: LedgerMode, onSelect: (LedgerMode) -> Unit) {
@@ -579,10 +586,7 @@ private fun Summary(totals: LedgerTotals) {
  * 两个态：
  * - 常态：整行可点（进入编辑）。**没有删除** ——
  *   账目删除不可撤销，常驻的「×」紧挨着手指的落点，误触一次就是永久损失。
- *   为了省一次点击而把「误删一笔账」的概率放在每行每屏，不划算。
  * - 编辑态：金额和备注就地变输入框，右侧「✓」保存、「删」删除（错误色）、「×」取消。
- *   删除挪进来之后，它前面多了一道「先点开这一行」的门槛，
- *   而真正想删的时候也就多一次点击。
  */
 @Composable
 private fun LedgerRow(

@@ -13,8 +13,8 @@ android {
         applicationId = "com.clivena.tonight"
         minSdk = 26
         targetSdk = 35
-        versionCode = 5
-        versionName = "0.5.0"
+        versionCode = 6
+        versionName = "0.6.0"
     }
 
     buildTypes {
@@ -38,6 +38,9 @@ android {
 
     buildFeatures {
         compose = true
+        // 设置页要显示版本号，读 BuildConfig.VERSION_NAME。
+        // AGP 8 起这个开关默认是关的，不显式打开就编译不过。
+        buildConfig = true
     }
 }
 

@@ -36,3 +36,32 @@ val MIGRATION_1_2 = object : Migration(1, 2) {
         db.execSQL("CREATE INDEX IF NOT EXISTS `index_expenses_date` ON `expenses` (`date`)")
     }
 }
+
+/**
+ * v2 → v3：新增 journal 表。
+ *
+ * 和 v1→v2 同一种做法：**只加一张新表，一列都不碰旧表**。
+ * tasks 和 expenses 的定义一个字没改，所以旧数据不需要搬运，也没有被覆盖的可能。
+ *
+ * 这一版和上一版的差别在于「主键」：journal 用日期做主键（一天一篇），
+ * 所以没有自增 id、没有 AUTOINCREMENT，末尾是 `PRIMARY KEY(\`date\`)`。
+ * 这行写法必须和 Room 的期望逐字一致，否则开库时校验不过、App 当场闪退。
+ *
+ * 基准文件：
+ *   app/schemas/com.clivena.tonight.data.local.AppDatabase/3.json
+ */
+val MIGRATION_2_3 = object : Migration(2, 3) {
+
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `journal` (" +
+                "`date` TEXT NOT NULL, " +
+                "`content` TEXT NOT NULL, " +
+                "`mood` INTEGER, " +
+                "`imageName` TEXT, " +
+                "`createdAt` INTEGER NOT NULL, " +
+                "`updatedAt` INTEGER NOT NULL, " +
+                "PRIMARY KEY(`date`))"
+        )
+    }
+}

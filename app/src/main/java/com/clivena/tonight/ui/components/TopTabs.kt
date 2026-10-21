@@ -22,16 +22,21 @@ import androidx.compose.ui.unit.dp
 import com.clivena.tonight.Tab
 
 /**
- * 「今天 / 规划 / 记账」切换栏。
+ * 「今天 / 规划 / 记账 / 日记」+ 右侧「设置」。
+ *
+ * 设置**不做成第五个 Tab**：Tab 是内容，设置是配置。
+ * 把配置摆在和内容同级的位置，会让顶部导航看起来有五个平等的目的地，
+ * 而实际上用户一年点不进设置几次。
  *
  * 它渲染在各自屏幕的主题里 —— 所以切到「规划」时，
  * 整条栏连同背景一起由浅转深。这个明暗跳变是有意的：
- * 白天和夜里本来就该是两种气质，三栏里只有「规划」是夜里那一面。
+ * 白天和夜里本来就该是两种气质，四栏里只有「规划」是夜里那一面。
  */
 @Composable
 fun TopTabs(
     active: Tab,
     onSelect: (Tab) -> Unit,
+    onSettings: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Row(
@@ -41,10 +46,28 @@ fun TopTabs(
         verticalAlignment = Alignment.CenterVertically
     ) {
         TabItem("今天", active == Tab.TODAY) { onSelect(Tab.TODAY) }
-        Spacer(Modifier.width(20.dp))
+        Spacer(Modifier.width(16.dp))
         TabItem("规划", active == Tab.PLAN) { onSelect(Tab.PLAN) }
-        Spacer(Modifier.width(20.dp))
+        Spacer(Modifier.width(16.dp))
         TabItem("记账", active == Tab.LEDGER) { onSelect(Tab.LEDGER) }
+        Spacer(Modifier.width(16.dp))
+        TabItem("日记", active == Tab.JOURNAL) { onSelect(Tab.JOURNAL) }
+
+        Spacer(Modifier.weight(1f))
+
+        Text(
+            text = "设置",
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (active == Tab.SETTINGS) {
+                MaterialTheme.colorScheme.onBackground
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
+            modifier = Modifier
+                .clip(RoundedCornerShape(6.dp))
+                .clickable(onClick = onSettings)
+                .padding(horizontal = 4.dp, vertical = 6.dp)
+        )
     }
 }
 

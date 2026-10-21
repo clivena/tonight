@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -51,6 +52,7 @@ fun LedgerInputBar(
     customNoteOpen: Boolean,
     customNote: String,
     onCustomNoteChange: (String) -> Unit,
+    onSaveAsTag: () -> Unit,
     onSubmit: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -69,32 +71,56 @@ fun LedgerInputBar(
 
     Column(modifier.fillMaxWidth()) {
         if (customNoteOpen) {
-            BasicTextField(
-                value = customNote,
-                onValueChange = onCustomNoteChange,
-                singleLine = true,
-                textStyle = MaterialTheme.typography.bodyLarge.copy(
-                    color = MaterialTheme.colorScheme.onBackground
-                ),
-                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                decorationBox = { inner ->
-                    Box {
-                        if (customNote.isEmpty()) {
-                            Text(
-                                text = "备注，比如「午饭」",
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        inner()
-                    }
-                },
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 24.dp, vertical = 8.dp)
-                    .focusRequester(noteFocus)
-            )
+                    .padding(horizontal = 24.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                BasicTextField(
+                    value = customNote,
+                    onValueChange = onCustomNoteChange,
+                    singleLine = true,
+                    textStyle = MaterialTheme.typography.bodyLarge.copy(
+                        color = MaterialTheme.colorScheme.onBackground
+                    ),
+                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                    decorationBox = { inner ->
+                        Box {
+                            if (customNote.isEmpty()) {
+                                Text(
+                                    text = "备注，比如「午饭」",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            inner()
+                        }
+                    },
+                    modifier = Modifier
+                        .weight(1f)
+                        .focusRequester(noteFocus)
+                )
+
+                Spacer(Modifier.width(10.dp))
+
+                // 一次性的备注和「以后常用」的标签是两件事，
+                // 所以「存为标签」必须是个显式动作 —— 不能靠系统去猜。
+                Text(
+                    text = "存为标签",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = if (customNote.isNotBlank()) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.outline
+                    },
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .clickable(enabled = customNote.isNotBlank(), onClick = onSaveAsTag)
+                        .padding(horizontal = 4.dp, vertical = 6.dp)
+                )
+            }
         }
 
         Row(

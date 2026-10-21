@@ -12,8 +12,13 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 
-/** App 的三个面：看今天的、排以后要做的、记花了多少的 */
-enum class Tab { TODAY, PLAN, LEDGER }
+/**
+ * App 的四个内容面 + 一个配置面。
+ *
+ * [SETTINGS] 不在顶部导航里占一格（见 TopTabs）—— 它是配置，不是内容，
+ * 但路由上仍然是一个独立的落点，所以照样放在这个枚举里。
+ */
+enum class Tab { TODAY, PLAN, LEDGER, JOURNAL, SETTINGS }
 
 /**
  * 只做一件事：决定此刻显示哪个 Tab。
