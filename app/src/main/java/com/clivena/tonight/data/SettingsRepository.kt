@@ -203,8 +203,15 @@ class SettingsRepository(context: Context) {
         private const val KEY_TAGS = "note_tags"
         private const val KEY_LAST_BACKUP = "last_backup_at"
 
-        /** 最清楚的一端：图透出约四分之一，显著但正文会发灰 */
-        const val MIN_BG_DIM = 0.75f
+        /**
+         * 最清楚的一端：**0，也就是完全不压** —— 屏幕上剩下的只有那张图。
+         *
+         * v0.8 这里写的是 0.75，理由是「再薄正文会发灰」。那个理由本身没错，
+         * 错在把「可读性」和「遮罩」绑成了一件事：遮罩是唯一手段，所以只能留 0.75。
+         * v0.10 把两者拆开 —— 遮罩归零，可读性交给文字自己的底（见 Theme 的内容面板）。
+         * 手段不再唯一，「滑杆到底还是有一层膜」这个限制也就没必要存在了。
+         */
+        const val MIN_BG_DIM = 0f
 
         /** 最淡的一端：图只剩 4%，基本等于纯色底 */
         const val MAX_BG_DIM = 0.96f

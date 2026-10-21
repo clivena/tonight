@@ -326,14 +326,20 @@ private fun ClaritySlider(dim: Float, onChange: (Float) -> Unit) {
             )
             // 显示一个定性词而不是百分比：百分比会被读成「清晰度只有 38%」，
             // 而真实含义是「遮罩浓度 88%」——那种数字只会让人想凑个整。
+            // 拖到底单列一档，因为那是这一版真正的变化点，混在「清楚」里看不出来。
             Text(
                 text = when {
+                    clarity > 0.97f -> "纯背景图"
                     clarity < 0.34f -> "偏淡"
                     clarity < 0.67f -> "适中"
                     else -> "清楚"
                 },
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = if (clarity > 0.97f) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                }
             )
         }
 
@@ -354,12 +360,12 @@ private fun ClaritySlider(dim: Float, onChange: (Float) -> Unit) {
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Text(
-                text = "淡",
+                text = "纯图",
                 style = MaterialTheme.typography.bodyMedium.copy(fontSize = 11.sp),
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Text(
-                text = "清楚",
+                text = "淡",
                 style = MaterialTheme.typography.bodyMedium.copy(fontSize = 11.sp),
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -368,7 +374,9 @@ private fun ClaritySlider(dim: Float, onChange: (Float) -> Unit) {
         Spacer(Modifier.height(10.dp))
 
         Text(
-            text = "往右拖，背景图更清楚；夜里会自动再淡一点。",
+            text = "往右拖，压在图上的色层越薄；拖到头屏幕上就只剩这张图，" +
+                "四边留一圈缝，内容退到一块半透明的圆角底上。夜里会自动再淡一点，" +
+                "但拖到头就不加了。",
             style = MaterialTheme.typography.bodyMedium.copy(
                 fontSize = 12.sp,
                 lineHeight = 18.sp
