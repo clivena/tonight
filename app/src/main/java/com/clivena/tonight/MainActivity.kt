@@ -26,6 +26,7 @@ import com.clivena.tonight.data.ExpenseRepository
 import com.clivena.tonight.data.JournalRepository
 import com.clivena.tonight.data.SettingsRepository
 import com.clivena.tonight.data.TaskRepository
+import com.clivena.tonight.data.backup.BackupService
 import com.clivena.tonight.ui.journal.JournalScreen
 import com.clivena.tonight.ui.journal.JournalViewModel
 import com.clivena.tonight.ui.ledger.LedgerScreen
@@ -57,7 +58,8 @@ class MainActivity : ComponentActivity() {
                 taskRepository = app.repository,
                 expenseRepository = app.expenseRepository,
                 journalRepository = app.journalRepository,
-                settings = app.settingsRepository
+                settings = app.settingsRepository,
+                backup = app.backupService
             )
         }
     }
@@ -83,7 +85,8 @@ private fun TonightRoot(
     taskRepository: TaskRepository,
     expenseRepository: ExpenseRepository,
     journalRepository: JournalRepository,
-    settings: SettingsRepository
+    settings: SettingsRepository,
+    backup: BackupService
 ) {
     val mainViewModel: MainViewModel = viewModel(
         factory = MainViewModel.factory(taskRepository)
@@ -194,7 +197,7 @@ private fun TonightRoot(
                 Tab.SETTINGS -> {
                     val settingsViewModel: SettingsViewModel = viewModel(
                         key = "settings",
-                        factory = SettingsViewModel.factory(settings)
+                        factory = SettingsViewModel.factory(settings, backup)
                     )
                     SettingsScreen(
                         viewModel = settingsViewModel,

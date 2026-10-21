@@ -9,6 +9,10 @@ activityCompose = "1.9.3"
 composeBom = "2024.11.00"
 room = "2.6.1"
 
+# 只在单元测试的类路径上出现，不进 APK
+junit = "4.13.2"
+json = "20240303"
+
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycle" }
@@ -26,6 +30,11 @@ androidx-material3 = { group = "androidx.compose.material3", name = "material3" 
 androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
 androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
 androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
+
+# 测试专用。org.json 本来就是 Android 平台自带的类，
+# 只是 JVM 上的 android.jar 里那份是「调用即抛异常」的桩，所以要换一份真实实现
+junit = { group = "junit", name = "junit", version.ref = "junit" }
+json-impl = { group = "org.json", name = "json", version.ref = "json" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

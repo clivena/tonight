@@ -28,8 +28,21 @@ interface JournalDao {
     @Query("SELECT createdAt FROM journal WHERE date = :date")
     suspend fun createdAtOf(date: String): Long?
 
+    /**
+     * 全部日记，给备份用。
+     *
+     * 不过滤「有字或有图」—— [observeTimeline] 那个条件的目的是不让空行占时间线，
+     * 而备份要的是完整镜像。一条空行也是用户那天的记录。
+     */
+    @Query("SELECT * FROM journal ORDER BY date ASC")
+    suspend fun getAll(): List<JournalEntity>
+
     @Upsert
     suspend fun upsert(entity: JournalEntity)
+
+    /** 备份恢复用。date 是主键，所以这里天然是「同一天覆盖」而不是「插入第二条」 */
+    @Upsert
+    suspend fun upsertAll(entries: List<JournalEntity>)
 
     @Query("DELETE FROM journal WHERE date = :date")
     suspend fun delete(date: String)

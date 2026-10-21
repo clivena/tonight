@@ -59,4 +59,16 @@ interface ExpenseDao {
 
     @Query("DELETE FROM expenses WHERE id = :id")
     suspend fun delete(id: Long)
+
+    /**
+     * 全部账目，给备份用。
+     *
+     * 这一条是本文件里唯一不带 `WHERE date = ...` 的查询 ——
+     * 备份要的是镜像，不是某一天某一月的视图。
+     */
+    @Query("SELECT * FROM expenses ORDER BY date ASC, createdAt ASC, id ASC")
+    suspend fun getAll(): List<ExpenseEntity>
+
+    @Insert
+    suspend fun insertAll(expenses: List<ExpenseEntity>)
 }

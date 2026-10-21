@@ -63,6 +63,16 @@ class SettingsRepository(context: Context) {
     private val _tags = MutableStateFlow(readTags())
     val tags: StateFlow<List<String>> = _tags.asStateFlow()
 
+    /**
+     * 上次导出成功的时间戳，0 = 从没导出过。
+     *
+     * 存这个是为了让设置页能说一句「上次备份：10 月 21 日」。
+     * 备份这种事的失效方式不是「不好用」，是「忘了」——
+     * 没有任何提示的话，第一次备份常常发生在某次后悔之后。
+     */
+    private val _lastBackupAt = MutableStateFlow(prefs.getLong(KEY_LAST_BACKUP, 0L))
+    val lastBackupAt: StateFlow<Long> = _lastBackupAt.asStateFlow()
+
     fun setPalette(name: String) {
         _paletteName.value = name
         prefs.edit().putString(KEY_PALETTE, name).apply()
@@ -78,6 +88,50 @@ class SettingsRepository(context: Context) {
         prefs.edit().apply {
             if (name == null) remove(KEY_BACKGROUND) else putString(KEY_BACKGROUND, name)
         }.apply()
+    }
+
+    fun setLastBackupAt(millis: Long) {
+        _lastBackupAt.value = millis
+        prefs.edit().putLong(KEY_LAST_BACKUP, millis).apply()
+    }
+
+    /**
+     * 从备份里恢复配置。
+     *
+     * 逐项走的是和手动设置完全相同的入口（[setPalette] / [setNightMode] …），
+     * 不直接写 prefs —— 那样的话「恢复的值越界了怎么办」就要在第二个地方再答一遍，
+     * 而答案迟早会不一致。
+     */
+    fun applySnapshot(
+        palette: String,
+        night: Boolean,
+        dim: Float,
+        background: String?,
+        tags: List<String>
+    ) {
+        // 空的设计不是「用户选了空的」，是这份备份里那个字段本来就没值 —— 不动
+        if (palette.isNotBlank()) setPalette(palette)
+        setNightMode(night)
+        setBackgroundDim(dim)
+        setBackgroundName(background)
+        setTags(tags)
+    }
+
+    /**
+     * 整体替换标签。
+     *
+     * 和 [addTag] 的差别：这里不做「已存在就失败」的判断，因为来源是备份，
+     * 重复项该静默去掉而不是报错；空列表直接忽略 ——
+     * 一个标签都没有的记账屏，标签条就成了一片空白。
+     */
+    private fun setTags(raw: List<String>) {
+        val cleaned = raw
+            .map { it.trim() }
+            .filter { it.isNotEmpty() && it.length <= MAX_TAG_LENGTH }
+            .distinct()
+            .take(MAX_TAGS)
+        if (cleaned.isEmpty()) return
+        update(cleaned)
     }
 
     /**
@@ -147,6 +201,7 @@ class SettingsRepository(context: Context) {
         private const val KEY_BG_DIM = "bg_dim"
         private const val KEY_NIGHT = "night_mode"
         private const val KEY_TAGS = "note_tags"
+        private const val KEY_LAST_BACKUP = "last_backup_at"
 
         /** 最清楚的一端：图透出约四分之一，显著但正文会发灰 */
         const val MIN_BG_DIM = 0.75f

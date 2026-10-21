@@ -41,4 +41,17 @@ interface TaskDao {
 
     @Query("SELECT * FROM tasks ORDER BY planDate DESC, orderIndex ASC")
     suspend fun getAll(): List<TaskEntity>
+
+    /**
+     * 某天的**全部**记录，包含已删除（DROPPED）的。
+     *
+     * 和 [getActive] 的差别就是那个 `status != 'DROPPED'`：
+     * 界面要的是视图（看不见删掉的），导入之后重排顺序要的是这张表的真身。
+     */
+    @Query("SELECT * FROM tasks WHERE planDate = :date ORDER BY orderIndex ASC, createdAt ASC, id ASC")
+    suspend fun getAllOn(date: String): List<TaskEntity>
+
+    /** 备份恢复用。逐条 insert 会在上千行时产生上千次事务，一次性提交才是一次 */
+    @Insert
+    suspend fun insertAll(tasks: List<TaskEntity>)
 }

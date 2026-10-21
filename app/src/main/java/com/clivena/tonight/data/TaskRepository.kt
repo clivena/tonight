@@ -41,9 +41,6 @@ interface TaskRepository {
 
     /** 在自己所属那天的清单里上移或下移一位 */
     suspend fun move(id: Long, direction: MoveDirection)
-
-    /** 导出全部数据为纯文本 —— 本地存储唯一的后悔药 */
-    suspend fun exportAll(): String
 }
 
 enum class MoveDirection { UP, DOWN }

@@ -21,10 +21,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -42,6 +44,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.clivena.tonight.BuildConfig
 import com.clivena.tonight.Tab
 import com.clivena.tonight.data.SettingsRepository
+import com.clivena.tonight.data.backup.BackupSummary
 import com.clivena.tonight.ui.components.TopTabs
 import com.clivena.tonight.ui.ledger.TagManagerDialog
 import com.clivena.tonight.ui.theme.LocalNightMode
@@ -49,6 +52,10 @@ import com.clivena.tonight.ui.theme.PaletteId
 import com.clivena.tonight.ui.theme.Palettes
 import com.clivena.tonight.util.ImageStore
 import kotlinx.coroutines.launch
+import java.time.Instant
+import java.time.LocalDateTime
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 /**
  * 「设置」屏。
@@ -223,6 +230,22 @@ fun SettingsScreen(
 
                 Spacer(Modifier.height(32.dp))
 
+                // ── 数据 ────────────────────────────────────────
+                SectionTitle("数据")
+                Spacer(Modifier.height(10.dp))
+
+                Text(
+                    text = "任务、账目、日记连同配图和主题设置，会打成一个 zip 存到你选的位置。",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Spacer(Modifier.height(12.dp))
+
+                DataSection(viewModel)
+
+                Spacer(Modifier.height(32.dp))
+
                 Box(
                     Modifier
                         .fillMaxWidth()
@@ -241,7 +264,8 @@ fun SettingsScreen(
                 Spacer(Modifier.height(4.dp))
 
                 Text(
-                    text = "数据全在本机，没有账号也不联网。卸载 App 会连账目、任务和日记一起清掉。",
+                    text = "数据全在本机，没有账号也不联网。卸载 App 会连账目、任务和日记一起清掉 —— " +
+                        "重装或换手机之前，先导一份备份。",
                     style = MaterialTheme.typography.bodyMedium.copy(
                         fontSize = 12.sp,
                         lineHeight = 18.sp
@@ -391,20 +415,181 @@ private fun Swatch(color: Color, selected: Boolean, onClick: () -> Unit) {
     )
 }
 
-/** 行内文字动作。这一屏不需要按钮，几个字就够 */
+/** 行内文字动作。这一屏不需要按钮，几个字就够。不可点时压成灰的，而不是消失 */
 @Composable
-private fun InlineAction(label: String, primary: Boolean, onClick: () -> Unit) {
+private fun InlineAction(
+    label: String,
+    primary: Boolean,
+    enabled: Boolean = true,
+    onClick: () -> Unit
+) {
     Text(
         text = label,
         style = MaterialTheme.typography.labelLarge,
-        color = if (primary) {
-            MaterialTheme.colorScheme.primary
-        } else {
-            MaterialTheme.colorScheme.onSurfaceVariant
+        color = when {
+            !enabled -> MaterialTheme.colorScheme.outline
+            primary -> MaterialTheme.colorScheme.primary
+            else -> MaterialTheme.colorScheme.onSurfaceVariant
         },
         modifier = Modifier
             .clip(RoundedCornerShape(6.dp))
-            .clickable(onClick = onClick)
+            .clickable(enabled = enabled, onClick = onClick)
             .padding(horizontal = 4.dp, vertical = 6.dp)
     )
 }
+
+/**
+ * 「数据」这一段。
+ *
+ * 两个动作都走系统文件选择器：导出用 `CreateDocument`、恢复用 `OpenDocument`。
+ * 这条路线的关键好处是**这个 App 至今没有一条 `uses-permission`**：
+ * 能读哪个文件由用户在系统界面里当场指定，既不需要存储权限，也不需要 FileProvider。
+ *
+ * 恢复的按钮点下去**不会立刻动数据** —— 它只解析出摘要弹出来。
+ * 真正的写入发生在弹窗里那一下确认之后，这道关卡是整个功能里最重要的一条。
+ */
+@Composable
+private fun DataSection(viewModel: SettingsViewModel) {
+    val phase by viewModel.phase.collectAsStateWithLifecycle()
+    val notice by viewModel.notice.collectAsStateWithLifecycle()
+    val lastBackupAt by viewModel.lastBackupAt.collectAsStateWithLifecycle()
+    val pending by viewModel.pending.collectAsStateWithLifecycle()
+
+    val createDocument = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/zip")
+    ) { uri ->
+        // uri 为 null = 用户在选择器里按了返回，包还在缓存里，得删掉
+        if (uri != null) viewModel.finishExport(uri) else viewModel.cancelExport()
+    }
+
+    val openDocument = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri -> if (uri != null) viewModel.inspect(uri) }
+
+    val busy = phase != BackupPhase.IDLE
+
+    Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+        InlineAction(
+            label = if (phase == BackupPhase.PACKING) "正在打包…" else "备份到文件",
+            primary = true,
+            enabled = !busy
+        ) {
+            // 先把包打好，再让用户选存哪：选择器一关就该有东西可写，
+            // 而不是让用户在关掉选择器之后盯着界面等几秒
+            viewModel.prepareExport { fileName -> createDocument.launch(fileName) }
+        }
+
+        InlineAction(
+            label = if (phase == BackupPhase.IMPORTING) "正在导入…" else "从备份恢复",
+            primary = false,
+            enabled = !busy
+        ) {
+            // 带上 */* ：下载目录里的 zip 有时被报成 application/octet-stream，
+            // 只认 application/zip 会让文件在选择器里变灰、看起来像「找不到备份」
+            openDocument.launch(arrayOf("application/zip", "application/octet-stream", "*/*"))
+        }
+    }
+
+    Spacer(Modifier.height(10.dp))
+
+    Text(
+        text = if (lastBackupAt == 0L) "还没备份过。" else "上次备份：${stampText(lastBackupAt)}",
+        style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp),
+        color = MaterialTheme.colorScheme.outline
+    )
+
+    notice?.let { text ->
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodyMedium.copy(
+                fontSize = 12.sp,
+                lineHeight = 18.sp
+            ),
+            color = MaterialTheme.colorScheme.onBackground
+        )
+    }
+
+    pending?.let { staged ->
+        ImportDialog(
+            summary = staged.summary,
+            onCancel = viewModel::cancelPendingImport,
+            onConfirm = viewModel::confirmImport
+        )
+    }
+}
+
+/**
+ * 恢复前的摘要。
+ *
+ * 这一屏存在的理由只有一个：**让用户在不可撤销的动作之前先看清自己要恢复的是什么。**
+ * 所以它给的是四个具体的数字，而不是「共 N 项」。
+ * 数字对不上（比如日记数是 0 而自己明明写过半年）时，用户会当场取消 ——
+ * 这正是它该起的作用。
+ */
+@Composable
+private fun ImportDialog(
+    summary: BackupSummary,
+    onCancel: () -> Unit,
+    onConfirm: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onCancel,
+        title = { Text("这份备份里有什么") },
+        text = {
+            Column {
+                Text(
+                    text = "导出于 ${stampText(summary.exportedAt)}，来自 v${summary.appVersion}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    text = "任务 ${summary.taskCount} · 账目 ${summary.expenseCount} · " +
+                        "日记 ${summary.journalCount} · 配图 ${summary.imageCount} 张",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    text = if (summary.isEmpty) {
+                        "这份备份里没有数据，导入也不会有什么变化。"
+                    } else {
+                        "导入是合并：手机上已有的内容不会被删，重复的会跳过。" +
+                            "两边同一天的日记，留下更新时间较新的那篇。"
+                    },
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontSize = 12.sp,
+                        lineHeight = 18.sp
+                    ),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirm, enabled = !summary.isEmpty) {
+                Text("导入")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onCancel) { Text("取消") }
+        }
+    )
+}
+
+/** 备份文件里的时间戳是毫秒，显示成「2026年10月21日 20:07」 */
+private val STAMP: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy年M月d日 HH:mm")
+
+/**
+ * 时间缺失时给「未知时间」而不是 1970 年。
+ *
+ * 备份里的时间戳理论上一定有；但万一读到一份手工改过的、缺这个字段的包，
+ * 显示「1970年1月1日 08:00」会让人以为是 App 算错了 ——
+ * 说「不知道」比说一个假的具体时间好。
+ */
+private fun stampText(millis: Long): String =
+    if (millis <= 0L) {
+        "未知时间"
+    } else {
+        LocalDateTime.ofInstant(Instant.ofEpochMilli(millis), ZoneId.systemDefault()).format(STAMP)
+    }

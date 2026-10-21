@@ -13,8 +13,8 @@ android {
         applicationId = "com.clivena.tonight"
         minSdk = 26
         targetSdk = 35
-        versionCode = 9
-        versionName = "0.8.0"
+        versionCode = 10
+        versionName = "0.9.0"
     }
 
     buildTypes {
@@ -76,4 +76,11 @@ dependencies {
     ksp(libs.androidx.room.compiler)
 
     debugImplementation(libs.androidx.ui.tooling)
+
+    // ── 测试（不进 APK）──────────────────────────────────────
+    // 备份的写入与读取都在 JVM 上能跑（只用到 java.util.zip 和 org.json），
+    // 所以「导出一份、再读回来、字段都对得上」这件事可以在编译阶段自证，
+    // 而不是等装到手机上才发现少了一列。
+    testImplementation(libs.junit)
+    testImplementation(libs.json.impl)
 }

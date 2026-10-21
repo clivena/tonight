@@ -73,29 +73,6 @@ class LocalTaskRepository(private val dao: TaskDao) : TaskRepository {
         reordered.forEachIndexed { i, task -> dao.updateOrderIndex(task.id, i + 1, now) }
     }
 
-    override suspend fun exportAll(): String {
-        val all = dao.getAll()
-        if (all.isEmpty()) return "（还没有任何记录）"
-
-        val builder = StringBuilder()
-        builder.appendLine("# 今晚 · 数据导出")
-        builder.appendLine()
-        all.groupBy { it.planDate }.forEach { (date, tasks) ->
-            builder.appendLine("## $date")
-            tasks.forEach { task ->
-                builder.appendLine("${task.status.toMark()} ${task.content}")
-            }
-            builder.appendLine()
-        }
-        return builder.toString()
-    }
-
-    private fun String.toMark(): String = when (this) {
-        TaskStatus.DONE.name -> "[x]"
-        TaskStatus.DROPPED.name -> "[-]"
-        else -> "[ ]"
-    }
-
     private fun TaskEntity.toDomain() = Task(
         id = id,
         planDate = LocalDate.parse(planDate),

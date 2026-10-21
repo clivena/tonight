@@ -8,6 +8,7 @@ import com.clivena.tonight.data.LocalJournalRepository
 import com.clivena.tonight.data.LocalTaskRepository
 import com.clivena.tonight.data.SettingsRepository
 import com.clivena.tonight.data.TaskRepository
+import com.clivena.tonight.data.backup.BackupService
 import com.clivena.tonight.data.local.AppDatabase
 
 /**
@@ -23,19 +24,32 @@ import com.clivena.tonight.data.local.AppDatabase
  */
 class TonightApp : Application() {
 
+    /**
+     * 数据库本身也暴露出来。
+     *
+     * 三个仓储各自只拿自己那张表的 DAO，互不相见（见下）——
+     * 这个约束对界面是对的，但备份是唯一一个**天然要同时摸三张表**的地方，
+     * 所以它拿的是这个实例，而不是三个 DAO。
+     */
+    val database: AppDatabase by lazy { AppDatabase.get(this) }
+
     val repository: TaskRepository by lazy {
-        LocalTaskRepository(AppDatabase.get(this).taskDao())
+        LocalTaskRepository(database.taskDao())
     }
 
     val expenseRepository: ExpenseRepository by lazy {
-        LocalExpenseRepository(AppDatabase.get(this).expenseDao())
+        LocalExpenseRepository(database.expenseDao())
     }
 
     val journalRepository: JournalRepository by lazy {
-        LocalJournalRepository(AppDatabase.get(this).journalDao())
+        LocalJournalRepository(database.journalDao())
     }
 
     val settingsRepository: SettingsRepository by lazy {
         SettingsRepository(this)
+    }
+
+    val backupService: BackupService by lazy {
+        BackupService(this, database, settingsRepository)
     }
 }
