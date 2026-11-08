@@ -3,6 +3,7 @@ package com.clivena.tonight
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -11,6 +12,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
@@ -44,13 +46,25 @@ import com.clivena.tonight.ui.today.TodayScreen
 import com.clivena.tonight.ui.today.TodayViewModel
 import com.clivena.tonight.util.DateUtil
 import com.clivena.tonight.util.ImageStore
+import kotlinx.coroutines.flow.MutableStateFlow
 import java.time.LocalDate
 
 class MainActivity : ComponentActivity() {
 
+    /**
+     * 桌面小组件点名要去的落点。
+     *
+     * 用 StateFlow 而不是一个 var：`onNewIntent` 可能在任何时刻来
+     * （App 已经开着，用户又点了小组件），而 Composition 要能感知到这次变化。
+     * 消费掉之后置回 null，避免下次重组又跳一次。
+     */
+    private val requestedTab = MutableStateFlow<Tab?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        requestedTab.value = tabFrom(intent)
 
         val app = application as TonightApp
         setContent {
@@ -59,9 +73,38 @@ class MainActivity : ComponentActivity() {
                 expenseRepository = app.expenseRepository,
                 journalRepository = app.journalRepository,
                 settings = app.settingsRepository,
-                backup = app.backupService
+                backup = app.backupService,
+                requestedTab = requestedTab
             )
         }
+    }
+
+    /**
+     * App 已经开着时，用户点了桌面小组件。
+     *
+     * 不重写这个方法的后果不是崩溃，而是"点了没反应" ——
+     * singleTop 会复用当前实例、只送来一个新的 Intent，
+     * 而没人接的那个 Intent 就等于没发生。
+     */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        tabFrom(intent)?.let { requestedTab.value = it }
+    }
+
+    private fun tabFrom(intent: Intent?): Tab? =
+        when (intent?.getStringExtra(EXTRA_TAB)) {
+            WIDGET_TAB_TODAY -> Tab.TODAY
+            WIDGET_TAB_LEDGER -> Tab.LEDGER
+            else -> null
+        }
+
+    companion object {
+        /** 小组件用这个 extra 说明「点的是哪半边」 */
+        const val EXTRA_TAB = "extra_tab"
+
+        const val WIDGET_TAB_TODAY = "TODAY"
+        const val WIDGET_TAB_LEDGER = "LEDGER"
     }
 }
 
@@ -86,12 +129,28 @@ private fun TonightRoot(
     expenseRepository: ExpenseRepository,
     journalRepository: JournalRepository,
     settings: SettingsRepository,
-    backup: BackupService
+    backup: BackupService,
+    requestedTab: MutableStateFlow<Tab?> = MutableStateFlow(null)
 ) {
     val mainViewModel: MainViewModel = viewModel(
         factory = MainViewModel.factory(taskRepository)
     )
     val tab by mainViewModel.tab.collectAsStateWithLifecycle()
+
+    // 桌面小组件点了哪半边，就先去哪一屏。
+    //
+    // 必须放在 MainViewModel 的落点判断**之后**消费：那边是异步读数据库、
+    // 稍后才会写 tab，如果这里先跳了，反而会被它覆盖回「今天」。
+    // 所以 MainViewModel 里有一个 explicit 标记 —— 一旦有人明确指定过落点，
+    // 那个自动判断就作废。这条规则对用户点 Tab 同样成立。
+    LaunchedEffect(requestedTab) {
+        requestedTab.collect { wanted ->
+            if (wanted != null) {
+                mainViewModel.selectTab(wanted)
+                requestedTab.value = null
+            }
+        }
+    }
 
     val paletteName by settings.paletteName.collectAsStateWithLifecycle()
     val backgroundName by settings.backgroundName.collectAsStateWithLifecycle()

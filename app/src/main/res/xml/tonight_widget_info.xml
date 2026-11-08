@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    组件元数据。
+
+    minWidth / minHeight 用那个老公式：70 × 格数 − 30。
+      4 格宽 = 250dp，2 格高 = 110dp
+    targetCellWidth / targetCellHeight 是 API 31 之后的新写法，
+    两个都写：新系统读后者（布局更准），老系统读前者。
+
+    updatePeriodMillis 的最小有效值是 30 分钟，系统还会打折扣。
+    它不是「每 30 分钟刷新一次」，而是「最多 30 分钟一次」——
+    真正保证及时的是 App 内写数据时的主动推送（见 TonightApp）。
+
+    resizeMode 只给 horizontal|vertical：让用户能把组件拉高，
+    拉高之后任务行数会跟着变（见 WidgetRenderer），这是 minSdk 26 上
+    唯一能做出的「响应式」。
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="250dp"
+    android:minHeight="110dp"
+    android:targetCellWidth="4"
+    android:targetCellHeight="2"
+    android:minResizeWidth="180dp"
+    android:minResizeHeight="110dp"
+    android:updatePeriodMillis="1800000"
+    android:resizeMode="horizontal|vertical"
+    android:initialLayout="@layout/widget_tonight"
+    android:widgetCategory="home_screen"
+    android:description="@string/widget_description" />

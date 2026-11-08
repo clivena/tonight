@@ -71,4 +71,18 @@ interface ExpenseDao {
 
     @Insert
     suspend fun insertAll(expenses: List<ExpenseEntity>)
+
+    /**
+     * 一次性读，不是 Flow —— 桌面小组件用的。
+     *
+     * 小组件不是持续观察的界面，它每次重建就是一次快照：
+     * 拿 Flow 反而要处理「订阅了没人关」的问题，而 RemoteViews 每次都是重画。
+     * 所以这里刻意返回集合而不是 Flow，和 [observeByDate] 并存，各服务各的场景。
+     */
+    @Query("SELECT * FROM expenses WHERE date = :date ORDER BY createdAt DESC, id DESC")
+    suspend fun getByDate(date: String): List<ExpenseEntity>
+
+    /** 某天的合计，一次性读。没记录时是 NULL，由调用方兜底成 0 */
+    @Query("SELECT SUM(amountCents) FROM expenses WHERE date = :date")
+    suspend fun getSum(date: String): Long?
 }

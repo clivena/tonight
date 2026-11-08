@@ -1,6 +1,7 @@
 package com.clivena.tonight
 
 import android.app.Application
+import androidx.room.InvalidationTracker
 import com.clivena.tonight.data.ExpenseRepository
 import com.clivena.tonight.data.JournalRepository
 import com.clivena.tonight.data.LocalExpenseRepository
@@ -10,6 +11,7 @@ import com.clivena.tonight.data.SettingsRepository
 import com.clivena.tonight.data.TaskRepository
 import com.clivena.tonight.data.backup.BackupService
 import com.clivena.tonight.data.local.AppDatabase
+import com.clivena.tonight.widget.TonightWidgetProvider
 
 /**
  * 手动持有依赖。
@@ -51,5 +53,34 @@ class TonightApp : Application() {
 
     val backupService: BackupService by lazy {
         BackupService(this, database, settingsRepository)
+    }
+
+    override fun onCreate() {
+        super.onCreate()
+        watchForWidgetRefresh()
+    }
+
+    /**
+     * 数据一变就刷新桌面小组件。
+     *
+     * **只写这一处**，而不是在每个 Repository 的写方法后面挂一行。
+     * 那种写法要记得改七处，而"忘了某一条写路径"的表现是
+     * 「加了任务桌面没变」—— 而这恰恰是小组件最容易让人失望的地方：
+     * 它看起来该实时，却不会自己发现数据变了。
+     *
+     * Room 的 InvalidationTracker 在事务提交后回调，覆盖了所有写入
+     * （包括以后新增的、以及备份恢复这种一次写三张表的批量操作）。
+     *
+     * 回调发生在 Room 的查询线程上，所以这里只做一次轻量的调度，
+     * 真正的读库和重建 RemoteViews 在 [TonightWidgetProvider.refreshAll] 里。
+     */
+    private fun watchForWidgetRefresh() {
+        database.invalidationTracker.addObserver(
+            object : InvalidationTracker.Observer("tasks", "expenses", "journal") {
+                override fun onInvalidated(tables: Set<String>) {
+                    TonightWidgetProvider.refreshAll(this@TonightApp)
+                }
+            }
+        )
     }
 }

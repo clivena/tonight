@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    一行任务。
+
+    行首那个圈不是圆点 drawable，就是「○ / ●」两个字符。
+    和顶栏那个 ☾ 是同一个决定：一个字符能表达的东西，
+    不值得为它引一套图标系统，也不值得为它准备四种颜色 × 两种状态的 drawable。
+    换色只需要 setTextColor。
+
+    includeFontPadding="false" 不是微调 —— 默认的字体留白会让每一行虚高 3–4dp，
+    三行下来就是 10dp，而 4×2 总共只有 110dp。
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/row_root"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:layout_marginTop="2dp">
+
+    <TextView
+        android:id="@+id/row_mark"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:includeFontPadding="false"
+        android:textSize="9sp"
+        android:text="@string/widget_mark_open" />
+
+    <TextView
+        android:id="@+id/row_text"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_marginStart="6dp"
+        android:includeFontPadding="false"
+        android:singleLine="true"
+        android:ellipsize="end"
+        android:textSize="13sp" />
+</LinearLayout>

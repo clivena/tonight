@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    右列的一笔账：左边备注，右边金额，两端对齐。
+
+    金额单独一个 TextView 而不是拼进备注里 —— 拼进去右侧就对不齐了，
+    而账目一旦对不齐，扫一眼就失去了意义。
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/money_row_root"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:layout_marginTop="3dp">
+
+    <TextView
+        android:id="@+id/money_row_note"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:includeFontPadding="false"
+        android:singleLine="true"
+        android:ellipsize="end"
+        android:layout_marginEnd="6dp"
+        android:textSize="12sp" />
+
+    <TextView
+        android:id="@+id/money_row_amount"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:includeFontPadding="false"
+        android:singleLine="true"
+        android:textSize="12sp" />
+</LinearLayout>

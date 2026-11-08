@@ -37,17 +37,32 @@ class MainViewModel(private val repository: TaskRepository) : ViewModel() {
     /** null 表示还在读数据库判断落点（第一帧，先留白） */
     val tab: StateFlow<Tab?> = _tab.asStateFlow()
 
+    /**
+     * 有没有人明确指定过落点。
+     *
+     * init 里那个判断是**异步**的（要先读一次数据库），它会在几十毫秒后才写 tab。
+     * 而这段时间里，用户可能已经点了某个 Tab —— 或者桌面小组件点了「记账」。
+     * 如果那个判断不看这个标记，就会出现「明明点了记账，界面却跳到今天」，
+     * 而且因为只发生在一瞬间，几乎无法复现。
+     *
+     * 规则很简单：**明确指定 > 自动判断**。谁先表态，就算谁的。
+     */
+    private var explicit = false
+
     init {
         viewModelScope.launch {
             val today = LocalDate.now()
             val hasPending = repository.observeActive(today).first()
                 .any { it.status == TaskStatus.PENDING }
             // 今天还有没做完的 → 先看今天；否则 → 直接去规划
-            _tab.value = if (hasPending) Tab.TODAY else Tab.PLAN
+            if (!explicit) {
+                _tab.value = if (hasPending) Tab.TODAY else Tab.PLAN
+            }
         }
     }
 
     fun selectTab(tab: Tab) {
+        explicit = true
         _tab.value = tab
     }
 

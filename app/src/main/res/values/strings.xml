@@ -1,4 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">今晚</string>
+
+    <string name="widget_name">今晚 · 今天</string>
+    <string name="widget_description">左边今天要做的事，右边今天花了多少。点圈可以直接勾掉。</string>
+    <string name="widget_today">今天</string>
+    <string name="widget_spent">今日支出</string>
+    <string name="widget_zero_money">¥0.00</string>
+    <string name="widget_mark_open">○</string>
+    <string name="widget_mark_done">●</string>
+    <string name="widget_no_tasks">今天还没排</string>
+    <string name="widget_no_spending">还没记</string>
+    <!-- 「今天 · 3 件没显示」里的后半句。占位符是没显示出来的条数 -->
+    <string name="widget_more">%1$d 件没显示</string>
 </resources>
