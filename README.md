@@ -755,8 +755,9 @@ BUILD SUCCESSFUL — BackupRoundTripTest: 10 tests, 0 failed
 BUILD SUCCESSFUL in 2m 21s
 ```
 
-- 产出：`app/build/outputs/apk/debug/app-debug.apk`，**9.54 MB**（10,005,013 字节）
+- 产出：`app/build/outputs/apk/debug/app-debug.apk`，**9.54 MB**（10,005,524 字节）
 - 包信息：`com.clivena.tonight` · `versionCode 12` · `versionName 0.11.0`
+- MD5：`71d5d531b18c1153ae1241502512feba`（`clean assembleDebug` 后取的，避免增量构建的旧产物）
 - 编译环境：JDK 21（Android Studio JBR）· AGP 8.7.3 · Gradle 8.9 · Build-Tools 34.0.0 / Platform 35
 
 **v0.11 数据库结构未变更（机器验证）：**
