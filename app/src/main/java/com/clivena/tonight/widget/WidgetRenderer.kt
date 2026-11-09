@@ -15,12 +15,18 @@ import com.clivena.tonight.util.MoneyUtil
  *
  * 为什么是普通函数而不是 Composable：RemoteViews 是 launcher 进程里的
  * 一套受限 View，Compose 根本进不去。这不是风格选择，是机制边界。
+ *
+ * 四张卡片共用这一套渲染，靠 [BaseWidgetProvider] 给出的三件事分流：
+ * 布局 id、任务行数、账目笔数。**行数返回 0 就等于「这张卡没有这块区域」**，
+ * 所以这里绝不能出现「不管有没有都先 setTextColor 一下」的写法 ——
+ * 对不存在的 id 调用 RemoteViews 方法不会抛在 App 这边，
+ * 只会在 launcher 里 inflate 失败，桌面显示「载入窗口小插件时出现问题」。
  */
 
 private const val PI_FLAGS =
     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
 
-/** 拿不到真实尺寸时的兜底：4×2 的标准高度 */
+/** 拿不到真实尺寸时的兜底：2 格高的标准值 */
 private const val DEFAULT_HEIGHT_DP = 110
 
 /**
@@ -31,24 +37,34 @@ private const val DEFAULT_HEIGHT_DP = 110
  * 布局不会变（那是 API 31 的 `setResponsiveEnabled`），但行数可以跟着变。
  * 用户把组件拉高，就多显示几件事，而不是把三行字拉成三行更大的字。
  */
-suspend fun renderWidget(context: Context, manager: AppWidgetManager, appWidgetId: Int) {
+suspend fun renderWidget(
+    context: Context,
+    manager: AppWidgetManager,
+    appWidgetId: Int,
+    provider: BaseWidgetProvider
+) {
     val heightDp = manager.getAppWidgetOptions(appWidgetId)
         .getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, DEFAULT_HEIGHT_DP)
 
-    val taskCap = when {
-        heightDp >= 165 -> 5
-        heightDp >= 135 -> 4
-        else -> 3
-    }
-    // 右列比左列拥挤：金额是大字，剩下那点高度只够放一到两笔
-    val moneyCap = if (heightDp >= 135) 2 else 1
+    val taskCap = provider.taskCap(heightDp)
+    val moneyCap = provider.moneyCap(heightDp)
 
     val snapshot = readWidgetSnapshot(context, taskCap, moneyCap)
-    manager.updateAppWidget(appWidgetId, buildViews(context, snapshot, readWidgetColors(context)))
+    manager.updateAppWidget(
+        appWidgetId,
+        buildViews(context, snapshot, readWidgetColors(context), provider, taskCap, moneyCap)
+    )
 }
 
-private fun buildViews(context: Context, s: WidgetSnapshot, c: WidgetColors): RemoteViews {
-    val views = RemoteViews(context.packageName, R.layout.widget_tonight)
+private fun buildViews(
+    context: Context,
+    s: WidgetSnapshot,
+    c: WidgetColors,
+    provider: BaseWidgetProvider,
+    taskCap: Int,
+    moneyCap: Int
+): RemoteViews {
+    val views = RemoteViews(context.packageName, provider.layoutRes)
 
     // 卡片底：两张 drawable 二选一。这里刻意不用 setColorFilter 染色 ——
     // 那是反射调用，某些 ROM 上不生效，而失败的样子是一块纯白卡片，
@@ -58,11 +74,31 @@ private fun buildViews(context: Context, s: WidgetSnapshot, c: WidgetColors): Re
         if (c.night) R.drawable.widget_card_dark else R.drawable.widget_card_light
     )
 
-    views.setTextColor(R.id.task_label, c.muted)
-    views.setTextColor(R.id.money_label, c.muted)
-    views.setTextColor(R.id.money_sum, c.accent)
-    views.setInt(R.id.divider, "setBackgroundColor", c.divider)
+    val hasTasks = taskCap > 0
+    val hasMoney = moneyCap > 0
 
+    if (hasTasks) fillTasks(views, context, s, c, provider.javaClass)
+    if (hasMoney) fillMoney(views, context, s, c)
+    if (hasTasks && hasMoney) {
+        views.setInt(R.id.divider, "setBackgroundColor", c.divider)
+    }
+
+    setClicks(views, context, hasTasks, hasMoney)
+    return views
+}
+
+/**
+ * 任务列。widget_today 和 widget_tonight 里这两块 id 同名，
+ * 所以同一段代码服务 3×2、4×2、5×2 三种卡片。
+ */
+private fun fillTasks(
+    views: RemoteViews,
+    context: Context,
+    s: WidgetSnapshot,
+    c: WidgetColors,
+    owner: Class<*>
+) {
+    views.setTextColor(R.id.task_label, c.muted)
     views.setTextViewText(R.id.task_label, labelText(context, s))
 
     views.removeAllViews(R.id.task_rows)
@@ -72,9 +108,19 @@ private fun buildViews(context: Context, s: WidgetSnapshot, c: WidgetColors): Re
             plainRow(context, context.getString(R.string.widget_no_tasks), c.muted)
         )
     } else {
-        s.tasks.forEach { views.addView(R.id.task_rows, taskRow(context, it, c)) }
+        s.tasks.forEach { views.addView(R.id.task_rows, taskRow(context, it, c, owner)) }
     }
+}
 
+/** 记账区：金额 + 若干笔明细。2×2 和合并卡共用 */
+private fun fillMoney(
+    views: RemoteViews,
+    context: Context,
+    s: WidgetSnapshot,
+    c: WidgetColors
+) {
+    views.setTextColor(R.id.money_label, c.muted)
+    views.setTextColor(R.id.money_sum, c.accent)
     views.setTextViewText(R.id.money_sum, MoneyUtil.format(s.spentCents))
 
     views.removeAllViews(R.id.money_rows)
@@ -86,13 +132,38 @@ private fun buildViews(context: Context, s: WidgetSnapshot, c: WidgetColors): Re
             plainRow(context, context.getString(R.string.widget_no_spending), c.muted)
         )
     }
+}
 
-    views.setOnClickPendingIntent(R.id.widget_root, openApp(context, MainActivity.WIDGET_TAB_TODAY))
-    views.setOnClickPendingIntent(R.id.money_sum, openApp(context, MainActivity.WIDGET_TAB_LEDGER))
-    views.setOnClickPendingIntent(R.id.money_label, openApp(context, MainActivity.WIDGET_TAB_LEDGER))
-    views.setOnClickPendingIntent(R.id.money_rows, openApp(context, MainActivity.WIDGET_TAB_LEDGER))
+/**
+ * 点击落点。
+ *
+ * 合并卡：点左边进「今天」、点右边进「记账」——
+ * 两个落点按区域分，因为一块卡上确实有两件事。
+ * 单卡：整张卡只有一个去处，给根布局设一次就够。
+ *
+ * 注意顺序：先给 root 设，再给 money 区设。RemoteViews 里子 View 的点击
+ * 会先被消费，所以子区域能覆盖父容器的落点 —— 这个顺序不能反过来写。
+ */
+private fun setClicks(
+    views: RemoteViews,
+    context: Context,
+    hasTasks: Boolean,
+    hasMoney: Boolean
+) {
+    when {
+        hasTasks && hasMoney -> {
+            views.setOnClickPendingIntent(R.id.widget_root, openApp(context, MainActivity.WIDGET_TAB_TODAY))
+            views.setOnClickPendingIntent(R.id.money_sum, openApp(context, MainActivity.WIDGET_TAB_LEDGER))
+            views.setOnClickPendingIntent(R.id.money_label, openApp(context, MainActivity.WIDGET_TAB_LEDGER))
+            views.setOnClickPendingIntent(R.id.money_rows, openApp(context, MainActivity.WIDGET_TAB_LEDGER))
+        }
 
-    return views
+        hasTasks ->
+            views.setOnClickPendingIntent(R.id.widget_root, openApp(context, MainActivity.WIDGET_TAB_TODAY))
+
+        else ->
+            views.setOnClickPendingIntent(R.id.widget_root, openApp(context, MainActivity.WIDGET_TAB_LEDGER))
+    }
 }
 
 /**
@@ -111,7 +182,12 @@ private fun labelText(context: Context, s: WidgetSnapshot): String {
     }
 }
 
-private fun taskRow(context: Context, task: WidgetTask, c: WidgetColors): RemoteViews {
+private fun taskRow(
+    context: Context,
+    task: WidgetTask,
+    c: WidgetColors,
+    owner: Class<*>
+): RemoteViews {
     val row = RemoteViews(context.packageName, R.layout.widget_task_row)
 
     row.setTextViewText(
@@ -124,7 +200,7 @@ private fun taskRow(context: Context, task: WidgetTask, c: WidgetColors): Remote
 
     // 点整行就勾掉 / 撤销。给根布局设一次就够：
     // TextView 默认不消费点击，事件会落到父容器上，所以点字和点圈一个效果。
-    row.setOnClickPendingIntent(R.id.row_root, toggleIntent(context, task.id))
+    row.setOnClickPendingIntent(R.id.row_root, toggleIntent(context, owner, task.id))
     return row
 }
 
@@ -154,12 +230,16 @@ private fun plainRow(context: Context, text: String, color: Int): RemoteViews {
  * 截断之后两条不同的任务会共用一个 PendingIntent，表现是「点 A 勾了 B」。
  * 用 `tonight://widget/task/<id>` 做 data，每个 id 天然一个，
  * 这才是这类问题的正确解法。
+ *
+ * [owner] 是**触发它的那张卡的 provider 类**，不是固定的某一个 ——
+ * 四张卡各自有独立的组件 id，广播发给其中任何一个都只和那张卡有关，
+ * 但四张卡都能勾同一条任务，所以处理动作在基类里统一。
  */
-private fun toggleIntent(context: Context, taskId: Long): PendingIntent {
-    val intent = Intent(context, TonightWidgetProvider::class.java).apply {
-        action = TonightWidgetProvider.ACTION_TOGGLE_TASK
+private fun toggleIntent(context: Context, owner: Class<*>, taskId: Long): PendingIntent {
+    val intent = Intent(context, owner).apply {
+        action = BaseWidgetProvider.ACTION_TOGGLE_TASK
         data = Uri.parse("tonight://widget/task/$taskId")
-        putExtra(TonightWidgetProvider.EXTRA_TASK_ID, taskId)
+        putExtra(BaseWidgetProvider.EXTRA_TASK_ID, taskId)
     }
     return PendingIntent.getBroadcast(context, 0, intent, PI_FLAGS)
 }

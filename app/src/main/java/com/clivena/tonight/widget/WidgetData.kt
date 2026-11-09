@@ -52,7 +52,10 @@ suspend fun readWidgetSnapshot(
     val app = context.applicationContext as TonightApp
     val today = LocalDate.now().toString()
 
-    val allTasks = app.database.taskDao().getActive(today)
+    // 只有任务区的卡（3×2）不查账目，只有记账区的卡（2×2）不查任务 ——
+    // 一张卡上不显示的东西，连查都不该查。这两个查询各自要开一次游标，
+    // 没必要为了「代码整齐」让 2×2 那张卡每次刷新都去扫一遍任务表。
+    val allTasks = if (maxTasks > 0) app.database.taskDao().getActive(today) else emptyList()
     val tasks = allTasks.take(maxTasks).map { entity ->
         WidgetTask(
             id = entity.id,
@@ -61,13 +64,16 @@ suspend fun readWidgetSnapshot(
         )
     }
 
-    val expenses = app.database.expenseDao().getByDate(today)
     val sum = app.database.expenseDao().getSum(today) ?: 0L
+    // 有了合计才知道「今天记没记过」，明细只在真的要显示时才查
+    val expenses = if (maxMoney > 0) app.database.expenseDao().getByDate(today) else emptyList()
 
     return WidgetSnapshot(
         tasks = tasks,
         hiddenTasks = (allTasks.size - tasks.size).coerceAtLeast(0),
         spentCents = sum,
+        // sum 为 0 但记过一笔 0 元也算法「记过」——不过这个 App 只记支出，
+        // 0 元账记不进去，所以用 sum 判断和用明细判断结果一致
         hasSpending = expenses.isNotEmpty(),
         recent = expenses.take(maxMoney).map { WidgetMoney(it.note, it.amountCents) }
     )

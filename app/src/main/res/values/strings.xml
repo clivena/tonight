@@ -2,8 +2,17 @@
 <resources>
     <string name="app_name">今晚</string>
 
+    <!-- 四张卡片的名称。前缀统一，列表里挨在一起；后缀区分尺寸与内容 -->
     <string name="widget_name">今晚 · 今天</string>
+    <string name="widget_wide_name">今晚 · 宽版</string>
+    <string name="widget_today_name">今晚 · 待办</string>
+    <string name="widget_ledger_name">今晚 · 记账</string>
+
     <string name="widget_description">左边今天要做的事，右边今天花了多少。点圈可以直接勾掉。</string>
+    <string name="widget_wide_description">更宽的一版：同样左边待办右边支出，每行能多显示两个字。</string>
+    <string name="widget_today_description">只有今天的待办清单，一行放得下整件事。点圈就能勾掉。</string>
+    <string name="widget_ledger_description">只有今天的支出合计和最近两笔。点一下进记账。</string>
+
     <string name="widget_today">今天</string>
     <string name="widget_spent">今日支出</string>
     <string name="widget_zero_money">¥0.00</string>

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    2×2 记账卡的元数据。70 × 2 − 30 = 110dp，正方形。
+
+    minResizeWidth 给到 110dp 而不是更大：这张卡本来就是给「只想要一块钱」
+    的人准备的，允许它一直小下去。往高拉一格会多出一笔明细。
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="110dp"
+    android:minHeight="110dp"
+    android:targetCellWidth="2"
+    android:targetCellHeight="2"
+    android:minResizeWidth="110dp"
+    android:minResizeHeight="110dp"
+    android:updatePeriodMillis="1800000"
+    android:resizeMode="horizontal|vertical"
+    android:initialLayout="@layout/widget_ledger"
+    android:previewLayout="@layout/widget_ledger"
+    android:widgetCategory="home_screen"
+    android:description="@string/widget_ledger_description" />

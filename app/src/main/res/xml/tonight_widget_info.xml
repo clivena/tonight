@@ -25,5 +25,6 @@
     android:updatePeriodMillis="1800000"
     android:resizeMode="horizontal|vertical"
     android:initialLayout="@layout/widget_tonight"
+    android:previewLayout="@layout/widget_tonight"
     android:widgetCategory="home_screen"
     android:description="@string/widget_description" />

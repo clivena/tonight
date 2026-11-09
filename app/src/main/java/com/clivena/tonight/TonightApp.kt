@@ -11,7 +11,7 @@ import com.clivena.tonight.data.SettingsRepository
 import com.clivena.tonight.data.TaskRepository
 import com.clivena.tonight.data.backup.BackupService
 import com.clivena.tonight.data.local.AppDatabase
-import com.clivena.tonight.widget.TonightWidgetProvider
+import com.clivena.tonight.widget.WidgetRefresher
 
 /**
  * 手动持有依赖。
@@ -72,13 +72,13 @@ class TonightApp : Application() {
      * （包括以后新增的、以及备份恢复这种一次写三张表的批量操作）。
      *
      * 回调发生在 Room 的查询线程上，所以这里只做一次轻量的调度，
-     * 真正的读库和重建 RemoteViews 在 [TonightWidgetProvider.refreshAll] 里。
+     * 真正的读库和重建 RemoteViews 在 [WidgetRefresher.refreshAll] 里。
      */
     private fun watchForWidgetRefresh() {
         database.invalidationTracker.addObserver(
             object : InvalidationTracker.Observer("tasks", "expenses", "journal") {
                 override fun onInvalidated(tables: Set<String>) {
-                    TonightWidgetProvider.refreshAll(this@TonightApp)
+                    WidgetRefresher.refreshAll(this@TonightApp)
                 }
             }
         )

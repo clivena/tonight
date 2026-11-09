@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    2×2：只有今天的账。
+
+    四张卡里最窄的一张：2 格宽 = 110dp，扣掉左右各 14dp 只剩 82dp。
+
+    金额用 autoSize 而不是固定字号，这是这张卡唯一一处「非标准」写法：
+    「¥128.50」24sp 放得下，「¥1,234.56」放不下。固定字号只会在四位数以上
+    那几天突然截断，而截断的样子（「¥1,23…」）看起来像数据算错了，
+    不像「字太大了」—— 那种错会让人怀疑账记错了。
+    autoSize 让它在 15~24sp 之间自己找合适的字号，金额多长都不会被裁。
+
+    autoSizeTextType 是 API 26 引入的，正好等于 minSdk，所以可以直接用
+    android: 命名空间的属性，不需要 AppCompat。
+
+    不放日期抬头：一张只有钱的卡，写不写「今天」都不会被认错，省下的
+    十几 dp 正好留给第二笔明细。
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <ImageView
+        android:id="@+id/widget_card"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="fitXY"
+        android:src="@drawable/widget_card_light"
+        android:contentDescription="@null" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:paddingStart="14dp"
+        android:paddingEnd="14dp"
+        android:paddingTop="13dp"
+        android:paddingBottom="13dp">
+
+        <TextView
+            android:id="@+id/money_label"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:includeFontPadding="false"
+            android:singleLine="true"
+            android:ellipsize="end"
+            android:textSize="11sp"
+            android:text="@string/widget_spent" />
+
+        <TextView
+            android:id="@+id/money_sum"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:includeFontPadding="false"
+            android:maxLines="1"
+            android:autoSizeTextType="uniform"
+            android:autoSizeMinTextSize="15sp"
+            android:autoSizeMaxTextSize="24sp"
+            android:autoSizeStepGranularity="1sp"
+            android:textSize="24sp"
+            android:text="@string/widget_zero_money" />
+
+        <LinearLayout
+            android:id="@+id/money_rows"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:orientation="vertical" />
+    </LinearLayout>
+</FrameLayout>

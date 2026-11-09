@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    5×2 合并卡的元数据。
+
+    布局和 4×2 **完全共用**（@layout/widget_tonight），这里只改网格尺寸 ——
+    两张卡高度都是 2 格、行数规则一样，宽度差异由 match_parent 自适应，
+    多写一份布局只会多一个要同步维护的地方而没有任何收益。
+
+    minWidth 用那个老公式：70 × 格数 − 30，所以 5 格 = 320dp。
+    targetCellWidth 是 API 31 之后的写法，两个都写：新系统读后者，
+    老系统读前者。
+
+    previewLayout（API 31+）让选择列表里显示**真实卡片**而不是一个方形图标。
+    低版本会忽略这个属性，不会报错。
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="320dp"
+    android:minHeight="110dp"
+    android:targetCellWidth="5"
+    android:targetCellHeight="2"
+    android:minResizeWidth="250dp"
+    android:minResizeHeight="110dp"
+    android:updatePeriodMillis="1800000"
+    android:resizeMode="horizontal|vertical"
+    android:initialLayout="@layout/widget_tonight"
+    android:previewLayout="@layout/widget_tonight"
+    android:widgetCategory="home_screen"
+    android:description="@string/widget_wide_description" />

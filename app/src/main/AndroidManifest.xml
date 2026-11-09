@@ -28,12 +28,22 @@
         </activity>
 
         <!--
-            桌面小组件。
+            桌面小组件 —— 四种尺寸，四个 receiver。
 
-            这里只声明 APPWIDGET_UPDATE 一个系统 action。
-            自己那个 TOGGLE_TASK **故意不写进 intent-filter** ——
-            PendingIntent 用的是显式 Intent，不需要 action 匹配就能送达；
-            写进 filter 反倒是把"勾任务"这个动作暴露给任何能发广播的 App。
+            为什么是四个类而不是一个类配四份 xml：
+            一个 receiver 只能挂一个 meta-data（一份 AppWidgetProviderInfo），
+            而网格尺寸就写在那一份里。想让桌面的选择列表里出现四种规格，
+            就必须注册四个组件。它们的渲染逻辑由 BaseWidgetProvider 共用，
+            子类只是「布局 id + 行数分档」的声明。
+
+            **老的那个（.widget.TonightWidgetProvider）不能删也不能改名**：
+            已经添加到桌面的 4×2 卡片把 ComponentName 写死在系统里，
+            改名或删类会让它变成「无法加载」，用户得手动移除再重新添加。
+
+            这里只声明 APPWIDGET_UPDATE 一个系统 action。自己那个 TOGGLE_TASK
+            **故意不写进 intent-filter** —— PendingIntent 用的是显式 Intent，
+            不需要 action 匹配就能送达；写进 filter 反倒是把「勾任务」
+            这个动作暴露给任何能发广播的 App。
         -->
         <receiver
             android:name=".widget.TonightWidgetProvider"
@@ -45,6 +55,42 @@
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/tonight_widget_info" />
+        </receiver>
+
+        <receiver
+            android:name=".widget.WideWidgetProvider"
+            android:exported="true"
+            android:label="@string/widget_wide_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/tonight_widget_wide_info" />
+        </receiver>
+
+        <receiver
+            android:name=".widget.TodayWidgetProvider"
+            android:exported="true"
+            android:label="@string/widget_today_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/tonight_widget_today_info" />
+        </receiver>
+
+        <receiver
+            android:name=".widget.LedgerWidgetProvider"
+            android:exported="true"
+            android:label="@string/widget_ledger_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/tonight_widget_ledger_info" />
         </receiver>
     </application>
 

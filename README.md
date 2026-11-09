@@ -11,12 +11,12 @@ v0.7 把深色还回来，但这次是**你自己按的** —— 顶栏一个月
 v0.8 让背景图可以调清楚：一根滑杆控遮罩浓度，同时把图片的导入分辨率从 1600 提到 2560 —— 后一件才是「图糊」的真正原因。
 v0.9 补上了这个项目欠了十几版的那件事：**数据导出**。一个 zip 里装着能读回去的 `data.json`、给人看的三个 csv，以及配图 —— 换手机时「从备份恢复」就搬过去了，而且是**合并**，不会删掉你在新手机上已经记的内容。
 v0.10 把「背景图上面永远有一层膜」这件事彻底解决：滑杆能拖到 **0**，屏幕上只剩那张图。字由内容自己的一块半透明圆角底托住，不再靠全屏遮罩。
-v0.11 把今天搬到桌面上：一个 4×2 的小组件，左边今天要做的事、右边今天花了多少，点任务前的圈可以直接勾掉。
+v0.12 把桌面小组件做成四种规格：**4×2 / 5×2** 是一半待办一半记账，**3×2** 只有待办、**2×2** 只有记账。想要哪一块，就把哪一块单独搬上桌面。
 
 - 平台：Android（`minSdk 26` / `targetSdk 35`）
 - 技术：Kotlin + Jetpack Compose + Room
 - 数据：纯本地存储，**无账号、无联网、无数据收集**，**零运行时第三方依赖**，`uses-permission` 一条都没有
-- 状态：v0.11.1，已编译验证 + 10 个单元测试 + 两条自证脚本（见「验证记录」）
+- 状态：v0.12.0，已编译验证 + 10 个单元测试 + 两条自证脚本（见「验证记录」）
 
 ---
 
@@ -516,6 +516,47 @@ PendingIntent 用显式 Intent，不需要 action 匹配就能送达。写进 fi
 
 ---
 
+## v0.12：四种卡片
+
+同一个组件拆成四种规格，长按桌面 →「小组件」里能看到四个「今晚」：
+
+| 卡片 | 格数 | 最小尺寸 | 内容 |
+|---|---|---|---|
+| **今晚 · 今天** | 4×2 | 250 × 110dp | 左 3 行任务 / 分隔线 / 右金额 + 1 笔 |
+| **今晚 · 宽版** | 5×2 | 320 × 110dp | 同上，每行多显示约两个字 |
+| **今晚 · 待办** | 3×2 | 180 × 110dp | 只有任务，3 行，一行约 10 字 |
+| **今晚 · 记账** | 2×2 | 110 × 110dp | 只有金额 + 2 笔 |
+
+### 四张卡必须是四个类，不是一份布局配四份配置
+
+一个 `receiver` 只能挂**一个** `meta-data`，而网格尺寸就写在那一份 `AppWidgetProviderInfo` 里。想让选择列表里出现四种规格，就只能注册四个组件。
+
+它们共用同一套渲染（`BaseWidgetProvider` + `WidgetRenderer`），子类只声明三件事：布局 id、任务行数、账目笔数。**行数返回 0 就等于「这张卡没有这块区域」** —— 渲染层据此决定要不要去碰 `task_label` / `money_sum` 这些 id。用 0 而不是再加一个布尔开关，是因为「有没有这块区域」和「这块区域放几行」本来就是同一件事，拆成两个字段迟早会出现「说有区域但行数是 0」的矛盾状态。
+
+### 5×2 和 4×2 共用一份布局
+
+两张卡高度都是 2 格 = 110dp，行数规则完全一样。宽度差异由 `match_parent` 自适应 —— 多写一份布局只会多一个要同步维护的地方，而差异是零。
+
+### 2×2 的金额用 autoSize
+
+2 格宽只有 110dp，扣掉内边距剩 **82dp**。「¥128.50」在 24sp 下放得下，「¥1,234.56」放不下。固定字号只会在四位数以上那几天突然截断，而截断的样子（「¥1,23…」）看起来像**账算错了**，不像「字太大了」。
+
+`autoSizeTextType` 是 API 26 引入的，正好等于 `minSdk`，所以直接用 `android:` 命名空间的属性就够，不需要 AppCompat。
+
+### 刷新只写一处，但必须刷全部
+
+`TonightApp` 里一个 `InvalidationTracker` 监听三张表，任何写入都触发 `WidgetRefresher.refreshAll()`，它遍历 **四个** `ComponentName` 各自的 id 列表。
+
+为什么不能「哪个组件收到广播就只刷它自己」：同一条任务可能同时出现在 3×2、4×2、5×2 三张卡上。在 3×2 上勾掉它，另外两张不跟着变，用户看到的就是「我明明勾了，另一块还是没勾」—— 这种不一致比完全不刷新更让人怀疑数据到底存没存上。
+
+`WidgetRefresher.PROVIDERS` 这个列表漏一个的后果是「那张卡永远不会自己更新」，而且只表现为偶发不对。`verify_widget.py` 会把它和 AndroidManifest 里的 `receiver` 做一一对应核对。
+
+### 有一件东西不能动：老 provider 的类名
+
+`TonightWidgetProvider` 这个名字不能改、不能删。已经添加到桌面的 4×2 卡片把 `ComponentName` 写死在系统里，改名或删类会让它们变成「无法加载」，用户得手动移除再重新添加。
+
+---
+
 ## 快速开始
 
 ### 方式 A：Android Studio（推荐）
@@ -568,7 +609,8 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 | 夜里觉得太亮 | 顶栏点一下 ☾ | 四屏同时转暗，状态记住 |
 | 背景图太淡、看不清 | 「设置」→「清晰度」往右拖 | 整屏实时变化，拖的时候就是预览 |
 | 想看纯粹的背景图 | 「设置」→「清晰度」拖到最左，标签会变成「纯背景图」 | 遮罩归零，内容退到一块半透明圆角底上，四周露图 |
-| 出门前想知道今天几件事 | 看桌面那个 4×2 组件（添加组件时搜「今晚」） | 左边清单右边今日支出；点任务前的圈直接勾掉 |
+| 出门前想知道今天几件事 | 桌面加「今晚 · 今天」或「今晚 · 宽版」（长按桌面 → 小组件 → 搜「今晚」） | 左边清单右边今日支出；点任务前的圈直接勾掉 |
+| 只想要待办、或者只想要账 | 桌面加「今晚 · 待办」（3×2）或「今晚 · 记账」（2×2） | 拆开放占地更小；待办卡一行能放整件事，记账卡只留金额 |
 | 背景图有点糊 | 「设置」→「换一张」重选 | 旧图是 1600px 存的，新导入的到 2560px |
 | 全勾完 | — | 清单底部一句「今天就这样。」 |
 
@@ -649,9 +691,13 @@ app/src/main/java/com/clivena/tonight/
 │   │   └── BackupService.kt         编排：导出、暂存、合并导入（事务内）
 │   └── local/                       Room：Entity / Dao / Database / Migration
 ├── widget/                      桌面小组件（RemoteViews，不碰 Compose）
-│   ├── TonightWidgetProvider.kt    入口：接收更新 / 勾选，全部走 goAsync
+│   ├── BaseWidgetProvider.kt       基类：接收更新 / 勾选（goAsync）+ 布局与行数声明
+│   ├── MergedWidgetProvider.kt     合并卡 4×2 / 5×2 —— 同一份布局，只有注册宽度不同
+│   ├── TodayWidgetProvider.kt      3×2：只有待办
+│   ├── LedgerWidgetProvider.kt     2×2：只有记账
+│   ├── WidgetRefresher.kt          刷新入口：遍历四种卡片各自的 id 列表
 │   ├── WidgetRenderer.kt           快照 → RemoteViews：行数按高度算，点击绑 PendingIntent
-│   ├── WidgetData.kt               一次性读快照（今日任务 + 合计 + 最近两笔）
+│   ├── WidgetData.kt               一次性读快照（今日任务 + 合计 + 最近几笔）
 │   └── WidgetColors.kt             从 App 的色板和 ☾ 开关取色，不另存一份
 ├── domain/
 │   ├── Task.kt                  任务领域模型（UI 只认这个）
@@ -728,6 +774,7 @@ Room 数据一变，界面自动刷新。记完一笔，三个合计和当前月
 | v0.9 | 3 | **无迁移**。备份只给三个 DAO 加了全量读 / 批量写（`getAll` / `insertAll` / `upsertAll`） |
 | v0.10 | 3 | **无迁移**。纯图档改的是 `bg_dim` 的**取值范围**（0.75~0.96 → 0~0.96），一个字段都没碰 |
 | v0.11 | 3 | **无迁移**。小组件只给 `ExpenseDao` 加了两个 suspend 一次性查询（`getByDate` / `getSum`），表定义没动 |
+| v0.12 | 3 | **无迁移**。四张卡只改渲染与注册，一行 SQL 都没写 |
 
 这五次「无迁移」不是巧合，是设计时第一个要想的问题：**这件事能不能不动结构就做完？**
 能不动，安装风险就是零 —— 不用赌迁移写对没写对。
@@ -755,9 +802,9 @@ BUILD SUCCESSFUL — BackupRoundTripTest: 10 tests, 0 failed
 BUILD SUCCESSFUL in 2m 21s
 ```
 
-- 产出：`app/build/outputs/apk/debug/app-debug.apk`，**9.54 MB**（10,005,524 字节）
-- 包信息：`com.clivena.tonight` · `versionCode 13` · `versionName 0.11.1`
-- MD5：`0db27a58996250d7da3a1b3fd52bf9e0`
+- 产出：`app/build/outputs/apk/debug/app-debug.apk`，**9.55 MB**（10,012,044 字节）
+- 包信息：`com.clivena.tonight` · `versionCode 14` · `versionName 0.12.0`
+- MD5：`50097b55f093080acd8e8466863d9246`
 
 **v0.11.1 修的那个坑（值得记）：**
 
@@ -804,6 +851,36 @@ intent-filter 里没有 TOGGLE_TASK                         ✅ 只有 APPWIDGET
 > 为了证明它真能抓到，故意把 `task_label` 改成 `task_lable` 跑了一次：
 > 脚本立刻报红，改回去转绿。**能证明自己会失败的检查才算检查。**
 
+**v0.12 组件自证（`verify_widget.py` 扩到四张卡）：**
+
+```
+共 4 张卡片：TonightWidgetProvider、WideWidgetProvider、TodayWidgetProvider、LedgerWidgetProvider
+  TonightWidgetProvider   布局=widget_tonight.xml  110dp → 3 行任务 / 1 笔账     ✅
+  WideWidgetProvider      布局=widget_tonight.xml  110dp → 3 行任务 / 1 笔账     ✅
+  TodayWidgetProvider     布局=widget_today.xml    110dp → 3 行任务 / 0 笔账     ✅
+  LedgerWidgetProvider    布局=widget_ledger.xml   110dp → 0 行任务 / 2 笔账     ✅
+
+manifest 里注册了 4 个 widget receiver          ✅ 与 PROVIDERS 一一对应
+  tonight_widget_info.xml        4×2 格 = 250×110dp    ✅ 70×格数−30
+  tonight_widget_wide_info.xml   5×2 格 = 320×110dp
+  tonight_widget_today_info.xml  3×2 格 = 180×110dp
+  tonight_widget_ledger_info.xml 2×2 格 = 110×110dp
+布局里含该卡要画的每一块（任务区 / 记账区 / 分隔线）   ✅
+info 的 initialLayout == 该 provider 的 layoutRes      ✅
+2×2 金额有 autoSize                                    ✅
+```
+
+> v0.12 新增的三条断言，针对的都是「一张卡变成四张卡」带来的新错法：
+>
+> ① **布局里缺某个区域** —— `taskCap()` 写错，或 `layoutRes` 接成了另一张卡的布局。
+> ② **`info` 的 `initialLayout` 与 `layoutRes` 不一致** —— 不会崩，但 5×2 会显示成
+> 「只有待办」。这种「看起来对但内容不对」比崩溃更难发现，只有比对才查得出来。
+> ③ **`PROVIDERS` 与 manifest 的 receiver 数量对不上** —— 漏一个的表现是
+> 「那张卡永远不更新」，而且只偶发。
+>
+> 两个都注入验证过：把 5×2 的 `initialLayout` 改成 `widget_today`、把 2×2 的
+> `layoutRes` 改成 `widget_today`，脚本一次报出 4 条错、退出码 1；恢复后转 0。
+
 **v0.10 曲线自证（`verify_dim_curve.py`，从源码读常量）：**
 
 ```
@@ -835,12 +912,14 @@ expenses  建表 / 索引 / 列数（7）             ✅ 与 2.json 完全一�
 
 ---
 
-## 已知边界（v0.11）
+## 已知边界（v0.12）
 
 | 限制 | 说明 |
 |---|---|
 | **小组件不会实时刷新** | 在 App 里改数据会立刻同步；但关掉 App 后只能靠系统 30 分钟一次的调度，且不保证按时 |
-| **小组件不能换布局** | 你能把它拉大，但那只是多显示几行 —— 真正随尺寸重排要 API 31 |
+| **四种规格是四个独立组件** | 4×2 / 5×2 / 3×2 / 2×2 各自的尺寸是写死的，彼此不能替代。「一张卡随尺寸换布局」要 API 31 |
+| **5×2 不比 4×2 多看几条** | 两张卡高度都是 2 格，行数一样。宽度只让每行多放两个字 |
+| **2×2 卡一行只放得下四个字** | 2 格宽 = 110dp，扣内边距剩 82dp。长备注会被截断，所以只给 2 笔 |
 | 小组件只显示「今天」 | 看不了明天要做什么。想规划就去 App |
 | 小组件里已完成的任务没有划线 | RemoteViews 没有官方划线 API，靠反射调 `setPaintFlags` 会覆盖抗锯齿标志、有崩溃风险。改用实心点 + 变淡 |
 | 小组件里只能勾、不能改 | 改文字、删任务、记新账都要进 App |
@@ -895,6 +974,8 @@ v0.9 起有了后悔药：**设置 → 数据 → 备份到文件**，打成一�
 6. **桌面快捷入口** —— 长按「今晚」图标直接进某一屏（静态 App Shortcuts，零权限）。
    和小组件不重复：一个是「看」，一个是「去哪」
 7. **连续记账** —— 记完不收起键盘、不清焦点，一次把一天的账补完
+8. **小组件合并成一张** —— 等 `minSdk` 提到 31（`setResponsiveEnabled`），
+   四种规格就能收成一张随尺寸重排的卡。现在只能靠四个独立组件凑
 
 ---
 
