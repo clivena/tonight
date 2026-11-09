@@ -55,14 +55,28 @@
                 android:orientation="vertical" />
         </LinearLayout>
 
-        <View
+        <!--
+            分隔线用 ImageView，**不能用 View**。
+
+            RemoteViews 只认带 @RemoteView 注解的类，而 android.view.View
+            本身没有这个注解 —— 只有它的子类（TextView / ImageView …）有。
+            写 <View> 的后果不是"线画不出来"，而是**整个组件 inflate 失败**，
+            桌面上显示「载入窗口小插件时出现问题」，而且 updateAppWidget()
+            不会抛任何异常（apply 发生在 launcher 进程），
+            从 App 这边完全看不出发生了什么。
+
+            颜色仍然由 setInt(id, "setBackgroundColor", color) 在代码里给，
+            View.setBackgroundColor 带 @RemotableViewMethod，所以这条能过。
+        -->
+        <ImageView
             android:id="@+id/divider"
             android:layout_width="1dp"
             android:layout_height="match_parent"
             android:layout_marginStart="13dp"
             android:layout_marginEnd="15dp"
             android:layout_marginTop="2dp"
-            android:layout_marginBottom="2dp" />
+            android:layout_marginBottom="2dp"
+            android:contentDescription="@null" />
 
         <LinearLayout
             android:layout_width="0dp"
