@@ -16,7 +16,7 @@ v0.11 把今天搬到桌面上：一个 4×2 的小组件，左边今天要做�
 - 平台：Android（`minSdk 26` / `targetSdk 35`）
 - 技术：Kotlin + Jetpack Compose + Room
 - 数据：纯本地存储，**无账号、无联网、无数据收集**，**零运行时第三方依赖**，`uses-permission` 一条都没有
-- 状态：v0.11.0，已编译验证 + 10 个单元测试 + 两条自证脚本（见「验证记录」）
+- 状态：v0.11.1，已编译验证 + 10 个单元测试 + 两条自证脚本（见「验证记录」）
 
 ---
 
@@ -756,8 +756,20 @@ BUILD SUCCESSFUL in 2m 21s
 ```
 
 - 产出：`app/build/outputs/apk/debug/app-debug.apk`，**9.54 MB**（10,005,524 字节）
-- 包信息：`com.clivena.tonight` · `versionCode 12` · `versionName 0.11.0`
-- MD5：`71d5d531b18c1153ae1241502512feba`（`clean assembleDebug` 后取的，避免增量构建的旧产物）
+- 包信息：`com.clivena.tonight` · `versionCode 13` · `versionName 0.11.1`
+- MD5：`0db27a58996250d7da3a1b3fd52bf9e0`
+
+**v0.11.1 修的那个坑（值得记）：**
+
+小组件第一次装上去显示「载入窗口小插件时出现问题」。原因不是逻辑，是布局里
+用了 `<View>` 画分隔线 —— `RemoteViews` 只认带 `@RemoteView` 注解的类，
+`android.view.View` 本身没有，只有子类（TextView / ImageView …）有。
+**一个标签就让整个布局在 launcher 进程 inflate 失败**，而 `updateAppWidget()`
+一声不吭（apply 发生在 launcher 进程，异常不会抛回 App）。
+
+改成 `ImageView` 后正常。`verify_widget.py` 因此加了第 2.5 条断言：
+布局里每个标签都必须在 RemoteViews 白名单内，且**先剥注释再扫**（注释里举例的
+`<View>` 不算）。注入 `<View>` 验证过它确实会红。
 - 编译环境：JDK 21（Android Studio JBR）· AGP 8.7.3 · Gradle 8.9 · Build-Tools 34.0.0 / Platform 35
 
 **v0.11 数据库结构未变更（机器验证）：**
