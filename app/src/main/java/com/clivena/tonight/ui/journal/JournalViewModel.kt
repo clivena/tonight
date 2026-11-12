@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import java.time.YearMonth
 
 /**
  * 「日记」屏。
@@ -50,6 +51,22 @@ class JournalViewModel(
     private val _saved = MutableStateFlow(true)
     val saved: StateFlow<Boolean> = _saved.asStateFlow()
 
+    /** 是否显示日历视图。它不是第五个 Tab，只是这一屏的另一种看法 */
+    private val _calendarOpen = MutableStateFlow(false)
+    val calendarOpen: StateFlow<Boolean> = _calendarOpen.asStateFlow()
+
+    /** 日历正在看哪个月。和 viewDate 分开：翻月份不该动正在写的那一篇 */
+    private val _viewMonth = MutableStateFlow(YearMonth.from(today))
+    val viewMonth: StateFlow<YearMonth> = _viewMonth.asStateFlow()
+
+    /** 有内容的那几天。日历每格问一次「这天写过没有」 */
+    val writtenDates: StateFlow<Set<LocalDate>> = repository.observeWrittenDates()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = emptySet()
+        )
+
     val canGoForward: StateFlow<Boolean> = _viewDate
         .map { it.isBefore(today) }
         .stateIn(
@@ -58,7 +75,29 @@ class JournalViewModel(
             initialValue = false
         )
 
+    /** 日历能不能往未来翻。不能 —— 未来的日子还没发生的，谈不上写过 */
+    val canGoNextMonth: StateFlow<Boolean> = _viewMonth
+        .map { it.isBefore(YearMonth.from(today)) }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = false
+        )
+
     private var saveJob: Job? = null
+
+    /**
+     * 手上这段字属于哪一天。
+     *
+     * 为什么不能直接拿 `_viewDate.value` 当落盘日期：切日期是**先写库再改 `_viewDate`**，
+     * 而加载新一天是异步的 —— 两者中间有一个窗口，`_viewDate` 已经翻到新日期，
+     * 而 `_content` 还是上一天的字。这个窗口在「逐天点箭头」时小到撞不上，
+     * 但日历可以一下跳二十天，连点两格就正好落在里面，结果是**把 A 天的日记写进 B 天**。
+     *
+     * 所以内容的归属日期单独拿一个变量记住，它只在「真正加载完某一天的内容」时变，
+     * 不跟着 `_viewDate` 走。落盘一律用它。
+     */
+    private var contentDate: LocalDate = today
 
     init {
         viewModelScope.launch {
@@ -67,6 +106,7 @@ class JournalViewModel(
                 _content.value = existing?.content ?: ""
                 _mood.value = existing?.mood
                 _imageName.value = existing?.imageName ?: null
+                contentDate = date
                 _saved.value = true
             }
         }
@@ -90,14 +130,50 @@ class JournalViewModel(
     }
 
     fun shiftDate(days: Long) {
-        val target = _viewDate.value.plusDays(days)
+        goTo(_viewDate.value.plusDays(days))
+    }
+
+    /** 从日历点了某一天。空白的天也能点 —— 补写昨天是正经需求 */
+    fun openDate(date: LocalDate) {
+        goTo(date)
+    }
+
+    fun openCalendar() {
+        // 每次打开都把月份对准正在写的那一篇，而不是留着上次翻到的月。
+        // 从日历回来再进去，看到的第一眼应该是「我现在在哪」
+        _viewMonth.value = YearMonth.from(_viewDate.value)
+        _calendarOpen.value = true
+    }
+
+    fun closeCalendar() {
+        _calendarOpen.value = false
+    }
+
+    fun shiftMonth(months: Long) {
+        val target = _viewMonth.value.plusMonths(months)
+        if (target.isAfter(YearMonth.from(today))) return
+        _viewMonth.value = target
+    }
+
+    /**
+     * 切到某一天 —— **通往某一天的唯一路径**。
+     *
+     * 翻页箭头和日历格子都走这里。之前只有 [shiftDate] 会「先落盘再切」，
+     * 日历是第二个入口，各写一份必然有一处忘掉那 800ms。
+     * 落盘日期用 [contentDate] 而不是 `_viewDate`，理由见 [contentDate] 的注释。
+     */
+    private fun goTo(target: LocalDate) {
         if (target.isAfter(today)) return
-        val leaving = _viewDate.value
+        if (target == _viewDate.value) {
+            // 点了当天：不用落盘，内容还在内存里，日期也没变
+            _calendarOpen.value = false
+            return
+        }
+        saveJob?.cancel()
         viewModelScope.launch {
-            // 先把手上这篇写死再走，否则最后 800ms 的内容会跟着页面一起消失
-            saveJob?.cancel()
-            persist(leaving, _content.value, _mood.value, _imageName.value)
+            persist(contentDate, _content.value, _mood.value, _imageName.value)
             _viewDate.value = target
+            _calendarOpen.value = false
         }
     }
 
@@ -105,7 +181,7 @@ class JournalViewModel(
     fun flush() {
         saveJob?.cancel()
         viewModelScope.launch {
-            persist(_viewDate.value, _content.value, _mood.value, _imageName.value)
+            persist(contentDate, _content.value, _mood.value, _imageName.value)
         }
     }
 
@@ -114,7 +190,7 @@ class JournalViewModel(
         saveJob?.cancel()
         saveJob = viewModelScope.launch {
             delay(SAVE_DELAY_MS)
-            persist(_viewDate.value, _content.value, _mood.value, _imageName.value)
+            persist(contentDate, _content.value, _mood.value, _imageName.value)
         }
     }
 

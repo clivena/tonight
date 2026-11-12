@@ -5,6 +5,17 @@ import androidx.room.Query
 import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
 
+/**
+ * 「这一行算不算一篇日记」。
+ *
+ * 抽成常量而不是在两处各写一遍 SQL 片段，理由很具体：
+ * 时间线（往回翻）和日历（哪几天有点）是**两个入口看同一件事**。
+ * 一旦两处的过滤条件漂移，就会出现「日历上有点、点进去是空白页」——
+ * 它不崩、不报错，只是让人以为日记丢了。用同一个常量表达，
+ * 这种不一致在语法层就不可能出现，不需要靠人去记得对齐。
+ */
+private const val WRITTEN = "content != '' OR imageName IS NOT NULL"
+
 @Dao
 interface JournalDao {
 
@@ -19,10 +30,20 @@ interface JournalDao {
      * 空行不该占时间线的位置，否则翻过去全是空白页。
      */
     @Query(
-        "SELECT * FROM journal WHERE content != '' OR imageName IS NOT NULL " +
+        "SELECT * FROM journal WHERE $WRITTEN " +
             "ORDER BY date DESC"
     )
     fun observeTimeline(): Flow<List<JournalEntity>>
+
+    /**
+     * 写过的那些天，**只取日期列**。给日历用，一眼看出哪几天有内容。
+     *
+     * 不复用 [observeTimeline] 再在内存里 map 成日期集合：那样每翻一次屏
+     * 都要把几百篇正文全读进内存。这个查询只回一列短字符串，代价小到可以忽略。
+     * 过滤条件必须和 [observeTimeline] 完全一致 —— 两处共用 [WRITTEN]。
+     */
+    @Query("SELECT date FROM journal WHERE $WRITTEN ORDER BY date DESC")
+    fun observeWrittenDates(): Flow<List<String>>
 
     /** 首次创建时间。用来在反复保存时保住「这篇是哪天开始写的」 */
     @Query("SELECT createdAt FROM journal WHERE date = :date")

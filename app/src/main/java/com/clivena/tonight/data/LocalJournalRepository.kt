@@ -15,6 +15,9 @@ class LocalJournalRepository(private val dao: JournalDao) : JournalRepository {
     override fun observeTimeline(): Flow<List<Journal>> =
         dao.observeTimeline().map { rows -> rows.map { it.toDomain() } }
 
+    override fun observeWrittenDates(): Flow<Set<LocalDate>> =
+        dao.observeWrittenDates().map { dates -> dates.mapTo(HashSet(dates.size)) { LocalDate.parse(it) } }
+
     override suspend fun save(
         date: LocalDate,
         content: String,

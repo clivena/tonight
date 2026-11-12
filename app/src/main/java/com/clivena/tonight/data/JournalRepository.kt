@@ -19,6 +19,14 @@ interface JournalRepository {
     fun observeTimeline(): Flow<List<Journal>>
 
     /**
+     * 有内容的那几天。给日历做标记用 —— 只要日期，不要正文。
+     *
+     * 返回 Set 而不是 List：日历每格都要问一次「这天写过没有」，
+     * 一个月 42 格，用列表 contains 是 42 次线性扫描。
+     */
+    fun observeWrittenDates(): Flow<Set<LocalDate>>
+
+    /**
      * 保存。**同时承担「清空即删除」的语义** ——
      * 正文清空、图也删了，这一篇就不该再存在，
      * 否则时间线里会留下翻过去一片空白的页。
